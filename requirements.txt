@@ -1,0 +1,10 @@
+bcrypt
+boto3
+pandas
+psycopg2
+pytest
+pytest-mock
+pyyaml
+redshift_connector
+requests
+requests-mock
