@@ -53,7 +53,15 @@ def _decrypt_env_var(var, kms_client):
     try:
         decoded = b64decode(var)
         return kms_client.decrypt(CiphertextBlob=decoded)['Plaintext'].decode('utf-8')
-    except (ClientError, base64Error, TypeError):
-        logger.warning(
-            'Could not decrypt environment variable with value {}'.format(var))
-        return var
+    except (ClientError, base64Error, TypeError) as e:
+        logger.error(
+            'Could not decrypt environment variable with value \'{val}\': {err}'
+            .format(val=var, err=e))
+        raise ConfigHelperError(
+            'Could not decrypt environment variable with value \'{val}\': {err}'
+            .format(val=var, err=e)) from None
+
+
+class ConfigHelperError(Exception):
+    def __init__(self, message=None):
+        self.message = message

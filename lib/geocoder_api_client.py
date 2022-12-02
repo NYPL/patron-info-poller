@@ -51,6 +51,7 @@ class GeocoderApiClient:
             address_df.to_csv(address_stream, header=False,
                               columns=['address', 'city', 'region', 'postal_code'])
             raw_response = self._send_request(address_stream)
+
         response_df = pd.read_csv(BytesIO(raw_response), header=None, dtype=str,
                                   index_col=0, engine='python', names=[
                                   'index', 'input_address', 'match', 'match_type',
@@ -59,13 +60,6 @@ class GeocoderApiClient:
                                   'tract_id', 'block_id'])
         geoids = (response_df['state_id'] + response_df['county_id'] +
                   response_df['tract_id']).rename('geoid')
-
-        if len(geoids) != len(address_df):
-            self.logger.error('Size of input to geocoder ({input_size}) does not match size of output ({output_size})'
-                              .format(input_size=len(address_df), output_size=len(geoids)))
-            raise GeocoderApiClientError('Size of input to geocoder ({input_size}) does not match size of output ({output_size})'
-                                         .format(input_size=len(address_df), output_size=len(geoids)))
-
         return geoids
 
     def _send_request(self, address_stream):
