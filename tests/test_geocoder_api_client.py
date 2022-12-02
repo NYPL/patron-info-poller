@@ -53,21 +53,13 @@ class TestGeocoderApiClient:
         assert test_instance._send_request(
             test_stream) == bytes(_API_RESPONSE_1, 'utf-8')
 
-    def test_get_geoids_with_single_request_success(self, requests_mock, test_instance):
+    def test_get_geoids_with_single_request(self, requests_mock, test_instance):
         requests_mock.post(
             'https://test_geocoder_url?benchmark=test_geocoder_benchmark&vintage=test_geocoder_vintage',
             text=_API_RESPONSE_1)
 
         assert list(test_instance._get_geoids_with_single_request(_ADDRESS_DF)) == [
             '00111222222', np.nan, '44555666666', np.nan, np.nan]
-
-    def test_get_geoids_with_single_request_error(self, requests_mock, test_instance):
-        requests_mock.post(
-            'https://test_geocoder_url?benchmark=test_geocoder_benchmark&vintage=test_geocoder_vintage',
-            text=_API_RESPONSE_2)
-
-        with pytest.raises(GeocoderApiClientError):
-            test_instance._get_geoids_with_single_request(_ADDRESS_DF)
 
     def test_get_geoids(self, requests_mock, test_instance):
         requests_mock.post(
