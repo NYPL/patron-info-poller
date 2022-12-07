@@ -12,8 +12,9 @@ logger = create_log('config_helper')
 
 def load_env_file(run_type, file_string):
     """
-    This method loads a YAML config file containing environment variables, decrypts
-    the encrypted variables, and puts all the variables into os.environ.
+    This method loads a YAML config file containing environment variables,
+    decrypts the encrypted variables, and puts all the variables into
+    os.environ.
     """
 
     env_dict = None
@@ -27,7 +28,8 @@ def load_env_file(run_type, file_string):
                 logger.error('Invalid YAML file: {}'.format(open_file))
                 raise err
     except FileNotFoundError as err:
-        logger.error('Could not find config file: {}')
+        logger.error('Could not find config file: {}'.format(open_file))
+        raise err
 
     if env_dict:
         for key, value in env_dict.get('PLAINTEXT_VARIABLES', {}).items():
@@ -45,21 +47,22 @@ def load_env_file(run_type, file_string):
 
 def _decrypt_env_var(var, kms_client):
     """
-    This method takes a KMS-encoded environment variable and a KMS client and decrypts
-    the variable into a usable value.
+    This method takes a KMS-encoded environment variable and a KMS client and
+    decrypts the variable into a usable value.
     """
 
     logger.debug('Decrypting environment variable with value {}'.format(var))
     try:
         decoded = b64decode(var)
-        return kms_client.decrypt(CiphertextBlob=decoded)['Plaintext'].decode('utf-8')
+        return kms_client.decrypt(CiphertextBlob=decoded)['Plaintext'].decode(
+            'utf-8')
     except (ClientError, base64Error, TypeError) as e:
         logger.error(
-            'Could not decrypt environment variable with value \'{val}\': {err}'
-            .format(val=var, err=e))
+            'Could not decrypt environment variable with value '
+            '\'{val}\': {err}'.format(val=var, err=e))
         raise ConfigHelperError(
-            'Could not decrypt environment variable with value \'{val}\': {err}'
-            .format(val=var, err=e)) from None
+            'Could not decrypt environment variable with value '
+            '\'{val}\': {err}'.format(val=var, err=e)) from None
 
 
 class ConfigHelperError(Exception):
