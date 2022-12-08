@@ -18,6 +18,11 @@ class TestHelpers:
         'GEOCODER_API_BASE_URL': 'https://test_geocoder_url',
         'GEOCODER_API_BENCHMARK': 'test_geocoder_benchmark',
         'GEOCODER_API_VINTAGE': 'test_geocoder_vintage',
+        'PATRON_INFO_SCHEMA_URL': 'https://test_schema_url',
+        'KINESIS_STREAM_NAME': 'test_kinesis_stream',
+        'KINESIS_BATCH_SIZE': '2',
+        'S3_BUCKET': 'test_s3_bucket',
+        'S3_RESOURCE': 'test_s3_resource',
         'SIERRA_BATCH_SIZE': 'test_sierra_batch_size'
     }
 
@@ -29,4 +34,5 @@ class TestHelpers:
     @classmethod
     def clear_env_vars(cls):
         for key in cls.ENV_VARS.keys():
-            os.environ[key] = ''
+            if key in os.environ:
+                del os.environ[key]
