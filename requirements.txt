@@ -1,5 +1,8 @@
+avro
 bcrypt
 boto3
+flake8
+freezegun
 pandas
 psycopg2
 pytest

@@ -54,15 +54,18 @@ class DbClient:
         except (psycopg2.OperationalError, ClientError) as e:
             self.conn = None
             self.logger.error(
-                'Error connecting to {mode} database: {error}'.format(mode=mode, error=e))
+                'Error connecting to {mode} database: {error}'.format(
+                    mode=mode, error=e))
             raise DbClientError(
-                'Error connecting to {mode} database: {error}'.format(mode=mode, error=e)) from None
+                'Error connecting to {mode} database: {error}'.format(
+                    mode=mode, error=e)) from None
 
     def execute_query(self, query):
         """
         Executes an arbitrary query against the chosen database.
 
-        Returns a sequence of tuples representing the rows returned by the query.
+        Returns a sequence of tuples representing the rows returned by the
+        query.
         """
         if self.conn is None:
             return []
@@ -75,10 +78,12 @@ class DbClient:
             return cursor.fetchall()
         except Exception as e:
             self.conn.rollback()
-            self.logger.error('Error executing {mode} query \'{query}\': {error}'.format(
-                mode=self.mode, query=query, error=e))
-            raise DbClientError('Error executing {mode} query \'{query}\': {error}'.format(
-                mode=self.mode, query=query, error=e)) from None
+            self.logger.error(('Error executing {mode} query \'{query}\': '
+                               '{error}').format(mode=self.mode, query=query,
+                                                 error=e))
+            raise DbClientError(('Error executing {mode} query \'{query}\': '
+                                 '{error}').format(mode=self.mode, query=query,
+                                                   error=e)) from None
         finally:
             cursor.close()
 

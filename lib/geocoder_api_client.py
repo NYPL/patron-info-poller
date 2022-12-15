@@ -14,14 +14,15 @@ class GeocoderApiClient:
     def __init__(self):
         self.logger = create_log('geocoder_api_client')
 
-        retry_policy = Retry(total=2, backoff_factor=4, status_forcelist=[
-                             500, 502, 503, 504], allowed_methods=frozenset(['GET', 'POST']))
+        retry_policy = Retry(total=5, backoff_factor=4,
+                             status_forcelist=[500, 502, 503, 504],
+                             allowed_methods=frozenset(['GET', 'POST']))
         self.session = requests.Session()
         self.session.mount('https://', HTTPAdapter(max_retries=retry_policy))
 
     def get_geoids(self, address_df):
         """
-        Geocodes the addresses in address_df by sending two requests to the 
+        Geocodes the addresses in address_df by sending two requests to the
         API: one with all of the input addresses and another with the addresses
         that failed to be geocoded in the first request. This is recommended by
         the API because it sometimes erroneously fails to match an address when
@@ -31,8 +32,8 @@ class GeocoderApiClient:
         Returns a dataframe containing the geoids (or NaN) indexed to match
         address_df.
         """
-
-        self.logger.info('Sending batch of addresses to geocoder API')
+        self.logger.info(
+            'Sending ({}) addresses to geocoder API'.format(len(address_df)))
         geoids = self._get_geoids_with_single_request(address_df)
         retry_indices = geoids[geoids.isnull()].index
         retry_address_df = address_df.loc[retry_indices]
@@ -46,18 +47,22 @@ class GeocoderApiClient:
         Returns a dataframe containing the geoids (or NaN) indexed to match
         address_df.
         """
-
         with BytesIO() as address_stream:
             address_df.to_csv(address_stream, header=False,
-                              columns=['address', 'city', 'region', 'postal_code'])
+                              columns=['address', 'city', 'region',
+                                       'postal_code'])
+            self.logger.debug(
+                'Sending {}-address batch to geocoder API'.format(
+                    len(address_df)))
             raw_response = self._send_request(address_stream)
 
-        response_df = pd.read_csv(BytesIO(raw_response), header=None, dtype=str,
-                                  index_col=0, engine='python', names=[
-                                  'index', 'input_address', 'match', 'match_type',
-                                  'matched_address', 'coordinates', 'tigerline_id',
-                                  'tigerline_side', 'state_id', 'county_id',
-                                  'tract_id', 'block_id'])
+        response_df = pd.read_csv(BytesIO(raw_response), header=None,
+                                  dtype=str, index_col=0, engine='python',
+                                  names=['index', 'input_address', 'match',
+                                         'match_type', 'matched_address',
+                                         'coordinates', 'tigerline_id',
+                                         'tigerline_side', 'state_id',
+                                         'county_id', 'tract_id', 'block_id'])
         geoids = (response_df['state_id'] + response_df['county_id'] +
                   response_df['tract_id']).rename('geoid')
         return geoids
@@ -69,14 +74,13 @@ class GeocoderApiClient:
         Returns a csv string where each line contains information about a
         single geocoded address.
         """
-
-        self.logger.debug('Sending batch request to geocoder API')
         address_stream.seek(0)
         try:
             response = self.session.post(
                 os.environ['GEOCODER_API_BASE_URL'],
                 files={'addressFile': NamedTextIOWrapper(
-                    address_stream, name='input_addresses.csv', encoding='utf-8')},
+                    address_stream, name='input_addresses.csv',
+                    encoding='utf-8')},
                 params={
                     'benchmark': os.environ['GEOCODER_API_BENCHMARK'],
                     'vintage': os.environ['GEOCODER_API_VINTAGE']
@@ -87,7 +91,8 @@ class GeocoderApiClient:
             self.logger.error(
                 'Failed to retrieve geocoded addresses from API: {}'.format(e))
             raise GeocoderApiClientError(
-                'Failed to retrieve geocoded addresses from API: {}'.format(e)) from None
+                'Failed to retrieve geocoded addresses from API: {}'.format(
+                    e)) from None
 
 
 class NamedTextIOWrapper(TextIOWrapper):
