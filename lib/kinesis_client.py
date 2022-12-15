@@ -23,20 +23,25 @@ class KinesisClient:
         Sends list of Avro encoded patron records (represented as byte strings)
         to Kinesis stream.
         """
-        for i in range(0, len(encoded_records), int(
-                os.environ['KINESIS_BATCH_SIZE'])):
-            encoded_batch = encoded_records[i:i + int(
-                os.environ['KINESIS_BATCH_SIZE'])]
+        batch_size = int(os.environ['KINESIS_BATCH_SIZE'])
+        for i in range(0, len(encoded_records), batch_size):
+            encoded_batch = encoded_records[i:i + batch_size]
             kinesis_records = [{'Data': record, 'PartitionKey':
                                 str(int(time.time() * 1000000000))}
                                for record in encoded_batch]
-            self._send_kinesis_format_records(kinesis_records)
+            self._send_kinesis_format_records(kinesis_records, 1)
 
-    def _send_kinesis_format_records(self, kinesis_records):
+    def _send_kinesis_format_records(self, kinesis_records, call_count):
         """
         Sends list of Kinesis records to Kinesis stream. This method is
         recursively called when Kinesis fails to retrieve some of the records.
         """
+        if call_count > 5:
+            self.logger.error(
+                'Failed to send records to Kinesis 5 times in a row')
+            raise KinesisClientError(
+                'Failed to send records to Kinesis 5 times in a row') from None
+
         try:
             self.logger.info(
                 'Sending ({count}) records to {stream} Kinesis stream'.format(
@@ -53,7 +58,7 @@ class KinesisClient:
                 for i in range(len(response['Records'])):
                     if 'ErrorCode' in response['Records'][i]:
                         failed_records.append(kinesis_records[i])
-                self._send_kinesis_format_records(failed_records)
+                self._send_kinesis_format_records(failed_records, call_count+1)
         except ClientError as e:
             self.logger.error(
                 'Error sending records to Kinesis: {}'.format(e))

@@ -25,22 +25,11 @@ def main():
 
     has_max_batches = 'MAX_BATCHES' in os.environ
     batch_number = 1
+    poller_state = None
     finished = False
     while not finished:
-        # Retrieve the state if necessary either from the cache or the config
-        if (os.environ.get('IGNORE_CACHE', False) == 'True'
-                and batch_number == 1):
-            poller_state = {'creation_dt':
-                            os.environ.get('STARTING_CREATION_DT',
-                                           '2020-01-01 00:00:00-05'),
-                            'update_dt':
-                            os.environ.get('STARTING_UPDATE_DT',
-                                           '2020-01-01 00:00:00-05'),
-                            'deletion_date':
-                            os.environ.get('STARTING_DELETION_DATE',
-                                           '2020-01-01')}
-        elif os.environ.get('IGNORE_CACHE', False) != 'True':
-            poller_state = s3_client.fetch_state()
+        # Retrieve the query parameters to use for this batch
+        poller_state = _get_poller_state(s3_client, poller_state, batch_number)
 
         # Get data from Sierra
         logger.info('Begin processing batch {batch} with state {state}'.format(
@@ -107,6 +96,23 @@ def main():
         ('Finished processing session with {} batches, closing database '
          'connections').format(batch_number-1))
     sierra_client.close_connection()
+
+
+def _get_poller_state(s3_client, local_state, batch_number):
+    """
+    Retrieves the poller state from the cache, the config, or the local memory
+    """
+    if os.environ.get('IGNORE_CACHE', False) != 'True':
+        return s3_client.fetch_state()
+    elif batch_number == 1:
+        return {'creation_dt': os.environ.get('STARTING_CREATION_DT',
+                                              '2020-01-01 00:00:00-05'),
+                'update_dt': os.environ.get('STARTING_UPDATE_DT',
+                                            '2020-01-01 00:00:00-05'),
+                'deletion_date': os.environ.get('STARTING_DELETION_DATE',
+                                                '2020-01-01')}
+    else:
+        return local_state
 
 
 def _convert_dt_to_est_date(string_input):
