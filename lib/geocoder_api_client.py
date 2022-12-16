@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import requests
 
+from helpers.address_helper import reformat_malformed_addresses
 from helpers.log_helper import create_log
 from io import BytesIO, TextIOWrapper
 from requests.adapters import HTTPAdapter, Retry
@@ -29,14 +30,19 @@ class GeocoderApiClient:
         it's used in batch mode. For more info, see
         https://www2.census.gov/geo/pdfs/maps-data/data/Census_Geocoder_FAQ.pdf
 
-        Returns a dataframe containing the geoids (or NaN) indexed to match
+        Returns a series containing the geoids (or NaN) indexed to match
         address_df.
         """
         self.logger.info(
             'Sending ({}) addresses to geocoder API'.format(len(address_df)))
-        geoids = self._get_geoids_with_single_request(address_df)
+        input_address_df = address_df[
+            ['address', 'city', 'region', 'postal_code']].replace(
+                {r'\\': '', r'\'': '', r'"': ''}, regex=True)
+        geoids = self._get_geoids_with_single_request(input_address_df)
         retry_indices = geoids[geoids.isnull()].index
-        retry_address_df = address_df.loc[retry_indices]
+        retry_address_df = input_address_df.loc[retry_indices]
+        retry_address_df = retry_address_df.apply(
+            reformat_malformed_addresses, axis=1)
         geoids.update(self._get_geoids_with_single_request(retry_address_df))
         return geoids
 
@@ -44,7 +50,7 @@ class GeocoderApiClient:
         """
         Geocodes the addresses in address_df using a single API request.
 
-        Returns a dataframe containing the geoids (or NaN) indexed to match
+        Returns a series containing the geoids (or NaN) indexed to match
         address_df.
         """
         with BytesIO() as address_stream:
@@ -83,7 +89,8 @@ class GeocoderApiClient:
                     encoding='utf-8')},
                 params={
                     'benchmark': os.environ['GEOCODER_API_BENCHMARK'],
-                    'vintage': os.environ['GEOCODER_API_VINTAGE']
+                    'vintage': os.environ['GEOCODER_API_VINTAGE'],
+                    'key': 'c522958f5c0bb054ab5091d4614bc90d52b420ce'
                 },
                 timeout=300)
             return response.content
