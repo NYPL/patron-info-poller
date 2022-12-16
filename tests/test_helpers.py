@@ -3,6 +3,7 @@ import os
 
 class TestHelpers:
     ENV_VARS = {
+        'ENVIRONMENT': 'test_environment',
         'AWS_REGION': 'test_aws_region',
         'AWS_ACCESS_KEY_ID': 'test_aws_key_id',
         'AWS_SECRET_ACCESS_KEY': 'test_aws_secret_key',
@@ -23,7 +24,6 @@ class TestHelpers:
         'KINESIS_BATCH_SIZE': '2',
         'S3_BUCKET': 'test_s3_bucket',
         'S3_RESOURCE': 'test_s3_resource',
-        'SIERRA_BATCH_SIZE': 'test_sierra_batch_size'
     }
 
     @classmethod
