@@ -2,6 +2,7 @@ import datetime
 import os
 import pandas as pd
 
+from concurrent.futures import ThreadPoolExecutor
 from helpers.config_helper import load_env_file
 from helpers.log_helper import create_log
 from helpers.obfuscation_helper import obfuscate
@@ -36,50 +37,63 @@ def main():
             batch=batch_number, state=poller_state))
         sierra_raw_data = sierra_client.execute_query(
             build_new_patrons_query(poller_state['creation_dt']))
-        sierra_df = pd.DataFrame(data=sierra_raw_data, dtype='string',
-                                 columns=['patron_id_plaintext', 'ptype_code',
-                                          'pcode3', 'patron_home_library_code',
-                                          'city', 'region', 'postal_code',
-                                          'address', 'circ_active_date_et',
-                                          'last_updated_date_et',
-                                          'deletion_date_et',
-                                          'creation_timestamp'])
+        unprocessed_sierra_df = pd.DataFrame(
+            data=sierra_raw_data, dtype='string',
+            columns=['patron_id_plaintext', 'ptype_code', 'pcode3',
+                     'patron_home_library_code', 'city', 'region',
+                     'postal_code', 'address', 'circ_active_date_et',
+                     'last_updated_date_et', 'deletion_date_et',
+                     'creation_timestamp'])
+
+        # Reduce the dataframe to only one row per patron_id, keeping the row
+        # with the lowest display_order and patron_record_address_type_id.
+        should_keep_mask = ~unprocessed_sierra_df.duplicated(
+            'patron_id_plaintext', keep='first')
+        processed_df = unprocessed_sierra_df[should_keep_mask].reset_index(
+            drop=True)
 
         # Get geoids from geocoder API and join with Sierra data
-        geoids = geocoder_client.get_geoids(sierra_df)
-        full_df = sierra_df.join(geoids)
+        geoids = geocoder_client.get_geoids(processed_df)
+        processed_df = processed_df.join(geoids)
 
         # Modify data to match what's expected by the PatronInfo Avro schema
-        full_df['ptype_code'] = pd.to_numeric(
-            sierra_df['ptype_code'], errors='coerce').astype('Int64')
-        full_df['pcode3'] = pd.to_numeric(
-            sierra_df['pcode3'], errors='coerce').astype('Int64')
-        full_df['creation_date_et'] = sierra_df['creation_timestamp'].apply(
-            _convert_dt_to_est_date)
+        processed_df['ptype_code'] = pd.to_numeric(
+            processed_df['ptype_code'], errors='coerce').astype('Int64')
+        processed_df['pcode3'] = pd.to_numeric(
+            processed_df['pcode3'], errors='coerce').astype('Int64')
+        processed_df['creation_date_et'] = processed_df[
+            'creation_timestamp'].apply(_convert_dt_to_est_date)
 
         # Obfuscate the patron ids and addresses using bcrypt
-        logger.info('Obfuscating ({}) patron ids'.format(len(full_df)))
-        full_df['patron_id'] = full_df['patron_id_plaintext'].apply(obfuscate)
+        logger.info('Obfuscating ({}) patron ids'.format(len(processed_df)))
+        with ThreadPoolExecutor() as executor:
+            processed_df['patron_id'] = list(executor.map(
+                obfuscate, processed_df['patron_id_plaintext']))
 
         logger.info('Concatenating and obfuscating ({}) addresses'.format(
-            len(full_df)))
-        full_df['address_hash'] = (full_df['patron_id_plaintext'] + '_' +
-                                   full_df['address'].fillna('') + '_' +
-                                   full_df['city'].fillna('') + '_' +
-                                   full_df['region'].fillna('') + '_' +
-                                   full_df['postal_code'].fillna('')).apply(
-            obfuscate)
+            len(processed_df)))
+        processed_df['address_hash_plaintext'] = (
+            processed_df['patron_id_plaintext'] + '_' +
+            processed_df['address'].fillna('') + '_' +
+            processed_df['city'].fillna('') + '_' +
+            processed_df['region'].fillna('') + '_' +
+            processed_df['postal_code'].fillna(''))
+        with ThreadPoolExecutor() as executor:
+            processed_df['address_hash'] = list(executor.map(
+                obfuscate, processed_df['address_hash_plaintext']))
 
         # Encode the resulting data and send it to Kinesis
-        results_df = full_df[['patron_id', 'address_hash', 'postal_code',
-                              'geoid', 'creation_date_et', 'deletion_date_et',
-                              'circ_active_date_et', 'ptype_code', 'pcode3',
-                              'patron_home_library_code']]
+        results_df = processed_df[['patron_id', 'address_hash', 'postal_code',
+                                   'geoid', 'creation_date_et',
+                                   'deletion_date_et', 'circ_active_date_et',
+                                   'ptype_code', 'pcode3',
+                                   'patron_home_library_code']]
         encoded_records = avro_encoder.encode_batch(results_df)
         kinesis_client.send_records(encoded_records)
 
         # Cache the new state in S3
-        poller_state['creation_dt'] = sierra_df['creation_timestamp'].iat[-1]
+        poller_state['creation_dt'] = unprocessed_sierra_df[
+            'creation_timestamp'].iat[-1]
         if os.environ.get('IGNORE_CACHE', False) != 'True':
             s3_client.set_state(poller_state)
         logger.info('Finished processing batch {}'.format(batch_number))
@@ -87,7 +101,8 @@ def main():
         # Check if processing is complete
         reached_max_batches = has_max_batches and batch_number >= int(
             os.environ['MAX_BATCHES'])
-        no_more_records = len(sierra_df) < int(os.environ['SIERRA_BATCH_SIZE'])
+        no_more_records = len(unprocessed_sierra_df) < int(
+            os.environ['SIERRA_BATCH_SIZE'])
         finished = reached_max_batches or no_more_records
         batch_number += 1
 
