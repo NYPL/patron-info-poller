@@ -14,7 +14,7 @@ class TestHelpers:
         'REDSHIFT_CLUSTER': 'test_redshift_cluster',
         'REDSHIFT_DB_NAME': 'test_redshift_name',
         'REDSHIFT_DB_USER': 'test_redshift_user',
-        'REDSHIFT_DB_PASSWORD': 'test_redshift_password',
+        'REDSHIFT_TABLE': 'test_redshift_table',
         'GEOCODER_API_BASE_URL': 'https://test_geocoder_url',
         'GEOCODER_API_BENCHMARK': 'test_geocoder_benchmark',
         'GEOCODER_API_VINTAGE': 'test_geocoder_vintage',
@@ -23,7 +23,7 @@ class TestHelpers:
         'KINESIS_BATCH_SIZE': '2',
         'S3_BUCKET': 'test_s3_bucket',
         'S3_RESOURCE': 'test_s3_resource',
-        'SIERRA_BATCH_SIZE': 'test_sierra_batch_size'
+        'SIERRA_BATCH_SIZE': '3'
     }
 
     @classmethod

@@ -45,8 +45,6 @@ class TestDbClient:
             cluster_identifier='test_redshift_cluster',
             database='test_redshift_name',
             db_user='test_redshift_user',
-            user='test_redshift_user',
-            password='test_redshift_password',
             region='test_aws_region',
             access_key_id='test_aws_key_id',
             secret_access_key='test_aws_secret_key')
