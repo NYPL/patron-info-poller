@@ -3,6 +3,7 @@ import os
 
 class TestHelpers:
     ENV_VARS = {
+        'ENVIRONMENT': 'test_environment',
         'AWS_REGION': 'test_aws_region',
         'AWS_ACCESS_KEY_ID': 'test_aws_key_id',
         'AWS_SECRET_ACCESS_KEY': 'test_aws_secret_key',

@@ -5,6 +5,7 @@ from tests.test_helpers import TestHelpers
 
 
 class TestDbClient:
+
     @classmethod
     def setup_class(cls):
         TestHelpers.set_env_vars()
