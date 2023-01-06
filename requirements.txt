@@ -3,6 +3,7 @@ bcrypt
 boto3
 flake8
 freezegun
+numpy
 pandas
 psycopg2
 pytest

@@ -9,6 +9,12 @@ The PatronInfoPoller periodically checks for patron data from Sierra, sends it t
 * Run `ENVIRONMENT=<env> python3 main.py`
   * `<env>` should be the config filename without the `.yaml` suffix
   * `make run` will run the poller using the development environment
+* Alternatively, to build and run a Docker container, run:
+```
+docker image build -t patron-info-poller:local .
+
+docker container run -e ENVIRONMENT=<env> -e AWS_ACCESS_KEY_ID=<aws_key> -e AWS_SECRET_ACCESS_KEY=<aws_secret_key> patron-info-poller:local
+```
 
 ## Environment variables
 
@@ -22,8 +28,8 @@ The PatronInfoPoller periodically checks for patron data from Sierra, sends it t
 | `SIERRA_DB_PASSWORD` | Obfuscated Sierra password for the user. There is only one user, so this is always the same. |
 | `REDSHIFT_CLUSTER` | Always `nypl-dw-production` |
 | `REDSHIFT_DB_NAME` | Which Redshift database to query (either `dev` or `production`) |
+| `REDSHIFT_TABLE` | Which Redshift table to query |
 | `REDSHIFT_DB_USER` | Obfuscated Redshift user |
-| `REDSHIFT_DB_PASSWORD` | Obfuscated Redshift password for the user |
 | `BCRYPT_SALT` | Obfuscated bcrypt salt |
 | `GEOCODER_API_BASE_URL` | Always `https://geocoding.geo.census.gov/geocoder/geographies/addressbatch`. API endpoint to which the poller sends batch geocoding requests. |
 | `GEOCODER_API_BENCHMARK` | Always `Public_AR_Current`. Which dataset should be used to address match. `Public_AR_Current` automatically uses the most recent. |
@@ -37,6 +43,7 @@ The PatronInfoPoller periodically checks for patron data from Sierra, sends it t
 | `LOG_LEVEL` (optional) | What level of logs should be output. Set to `warning` by default. |
 | `MAX_BATCHES` (optional) | The maximum number of times the poller should poll Sierra per session. If this is not set, the poller will continue querying until all new records in Sierra have been processed. |
 | `IGNORE_CACHE` (optional) | Whether fetching and setting the state from S3 should not be done. If this is true, the `STARTING_CREATION_DT`, `STARTING_UPDATE_DT`, and `STARTING_DELETION_DATE` environment variables will be used for the initial state (or `2020-01-01 00:00:00-05` by default). |
+| `BACKFILL` (optional) | Whether only the new patrons routine should be run. When `MAX_BATCHES` is not set and `STARTING_CREATION_DT` is, this is used to backfill data. |
 | `STARTING_CREATION_DT` (optional) | If `IGNORE_CACHE` is true, the datetime to use in the `WHERE` clause of the newly created patrons Sierra query. If `IGNORE_CACHE` is false, this field is not read. |
 | `STARTING_UPDATE_DT` (optional) | If `IGNORE_CACHE` is true, the datetime to use in the `WHERE` clause of the newly updated patrons Sierra query. If `IGNORE_CACHE` is false, this field is not read. |
 | `STARTING_DELETION_DATE` (optional) | If `IGNORE_CACHE` is true, the datetime to use in the `WHERE` clause of the newly deleted patrons Sierra query. If `IGNORE_CACHE` is false, this field is not read. |
