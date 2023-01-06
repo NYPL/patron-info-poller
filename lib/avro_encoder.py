@@ -40,8 +40,7 @@ class AvroEncoder:
             for patron_record in decoded_records:
                 try:
                     datum_writer.write(patron_record, encoder)
-                    encoded_records.append(
-                        base64.encodebytes(output_stream.getvalue()))
+                    encoded_records.append(output_stream.getvalue())
                     output_stream.seek(0)
                     output_stream.truncate(0)
                 except AvroException as e:
@@ -59,7 +58,7 @@ class AvroEncoder:
         used for testing purposes.
         """
         datum_reader = DatumReader(self.schema)
-        with BytesIO(base64.decodebytes(record)) as input_stream:
+        with BytesIO(record) as input_stream:
             decoder = BinaryDecoder(input_stream)
             return datum_reader.read(decoder)
 
