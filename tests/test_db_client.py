@@ -42,13 +42,10 @@ class TestDbClient:
                                   test_redshift_instance):
         assert test_redshift_instance.mode == DbMode.REDSHIFT
         test_redshift_conn.assert_called_once_with(
-            iam=True,
-            cluster_identifier='test_redshift_cluster',
+            host='test_redshift_host',
             database='test_redshift_name',
-            db_user='test_redshift_user',
-            region='test_aws_region',
-            access_key_id='test_aws_key_id',
-            secret_access_key='test_aws_secret_key')
+            user='test_redshift_user',
+            password='test_redshift_password')
 
     def test_execute_query_sierra(self, test_pg_conn, test_sierra_instance,
                                   mocker):
