@@ -14,10 +14,7 @@ class S3Client:
         self.logger = create_log('s3_client')
         self.s3_client = boto3.client(
             's3',
-            region_name=os.environ['AWS_REGION'],
-            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
-        )
+            region_name=os.environ.get('AWS_REGION', 'us-east-1'))
 
     def fetch_state(self):
         self.logger.info('Fetching cached query parameters from S3')

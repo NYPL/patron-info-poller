@@ -37,10 +37,7 @@ def load_env_file(run_type, file_string):
 
         kms_client = boto3.client(
             'kms',
-            region_name=os.environ['AWS_REGION'],
-            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
-        )
+            region_name=os.environ.get('AWS_REGION', 'us-east-1'))
         for key, value in env_dict.get('ENCRYPTED_VARIABLES', {}).items():
             os.environ[key] = _decrypt_env_var(value, kms_client)
 
