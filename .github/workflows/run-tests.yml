@@ -1,0 +1,37 @@
+name: Run Python unit tests
+
+on: 
+  pull_request:
+    actions: [ opened ]
+
+jobs:
+  changelog:
+    name: Updates changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dangoslen/changelog-enforcer@v3
+        with:
+          changeLogPath: "CHANGELOG.md"
+          skipLabels: "no-changelog", "skip-changelog"
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run linter and test suite
+        run: |
+          make lint
+          make test
