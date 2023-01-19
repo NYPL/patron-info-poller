@@ -248,8 +248,8 @@ class PipelineController:
         Redshift. If they do, take the geoid and obfuscated patron id from
         Redshift and join it with the original Sierra dataframe.
         """
-        address_hashes_str = ','.join(str(all_patrons_df['address_hash'].values)
-            [1:-1].split())
+        address_hashes_str = ','.join(
+            str(all_patrons_df['address_hash'].values)[1:-1].split())
         redshift_raw_data = redshift_client.execute_query(
             build_redshift_address_query(address_hashes_str))
         redshift_df = pd.DataFrame(
@@ -268,8 +268,8 @@ class PipelineController:
         Finds the Redshift data for recently deleted patrons and joins it with
         the deletion date from Sierra.
         """
-        patron_ids_str = ','.join(str(deleted_patrons_df['patron_id'].values)
-            [1:-1].split())
+        patron_ids_str = ','.join(
+            str(deleted_patrons_df['patron_id'].values)[1:-1].split())
         redshift_raw_data = redshift_client.execute_query(
             build_redshift_patron_query(patron_ids_str))
         redshift_df = pd.DataFrame(
