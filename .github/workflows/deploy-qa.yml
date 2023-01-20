@@ -1,4 +1,4 @@
-name: Deploy to QA
+name: Deploy to production if tagged as QA release
 
 on:
   release:
@@ -14,10 +14,10 @@ jobs:
       - name: check qa tag ${{ github.ref }}
         id: check-qa-tag
         run: |
-          if [[${{ github.ref }} =~ refs\/tags\/qa ]]; then
-            echo "::set-output name=run_jobs::true"
+          if [[ ${{ github.ref }} =~ refs\/tags\/qa ]]; then
+            echo "run_jobs=true" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=run_jobs::false"
+            echo "run_jobs=false" >> $GITHUB_OUTPUT
           fi
   publish_qa:
     needs: [ check_qa_tag ]
