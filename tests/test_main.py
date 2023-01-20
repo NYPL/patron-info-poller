@@ -20,12 +20,13 @@ class TestMain:
     def test_instance(self, mocker):
         mocker.patch('main.load_env_file')
         mocker.patch('main.create_log')
-    
+
     def test_main_without_backfill(self, test_instance, mocker):
         os.environ['BACKFILL'] = 'False'
 
         mock_pipeline_controller = mocker.MagicMock()
-        mocker.patch('main.PipelineController', return_value=mock_pipeline_controller)
+        mocker.patch('main.PipelineController',
+                     return_value=mock_pipeline_controller)
         main.main()
         mock_pipeline_controller.run_pipeline.assert_has_calls([
             mocker.call(PipelineMode.NEW_PATRONS),
@@ -33,13 +34,15 @@ class TestMain:
             mocker.call(PipelineMode.DELETED_PATRONS)])
 
         del os.environ['BACKFILL']
-        
+
     def test_main_with_backfill(self, test_instance, mocker):
         os.environ['BACKFILL'] = 'True'
 
         mock_pipeline_controller = mocker.MagicMock()
-        mocker.patch('main.PipelineController', return_value=mock_pipeline_controller)
+        mocker.patch('main.PipelineController',
+                     return_value=mock_pipeline_controller)
         main.main()
-        mock_pipeline_controller.run_pipeline.assert_called_once_with(PipelineMode.NEW_PATRONS)
+        mock_pipeline_controller.run_pipeline.assert_called_once_with(
+            PipelineMode.NEW_PATRONS)
 
         del os.environ['BACKFILL']

@@ -1,3 +1,8 @@
+## 2022-01-19 -- v0.0.4
+### Added
+- Added Github actions workflows for running tests and deploying to QA and
+production
+
 ## 2022-12-27 -- v0.0.3
 ### Added
 - Added controller to allow for different types of pipeline runs
