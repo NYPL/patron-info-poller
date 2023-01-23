@@ -1,8 +1,12 @@
-name: Deploy to production if tagged as QA release
+name: Deploy to QA if tagged as QA release
 
 on:
   release:
     types: [ released ]
+  
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   check_qa_tag:
@@ -31,8 +35,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1-node16
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::946183545209:role/patron-info-poller-qa-ECS-1-EC2InstanceProfileRole-1EME6UPBCDKMK
           aws-region: us-east-1
 
       - name: Login to Amazon ECR
