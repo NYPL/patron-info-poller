@@ -3,6 +3,10 @@ name: Deploy to QA if tagged as QA release
 on:
   release:
     types: [ released ]
+  
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   check_qa_tag:
