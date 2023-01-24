@@ -2,6 +2,7 @@ import datetime
 import os
 import pandas as pd
 import pytest
+import warnings
 
 from lib.pipeline_controller import PipelineController, PipelineMode
 from pandas.testing import assert_frame_equal, assert_series_equal
@@ -129,8 +130,12 @@ _NEW_AVRO_ENCODER_INPUT = pd.DataFrame(
     .astype({'ptype_code': 'Int64', 'pcode3': 'Int64'})
 
 _UPDATED_AVRO_ENCODER_INPUT = _NEW_AVRO_ENCODER_INPUT.copy()
-_UPDATED_AVRO_ENCODER_INPUT.loc[:, 'creation_date_et'] = [
-    '2021-01-03', '2021-02-03', None]
+# Ignore the FutureWarning caused by using .loc[:,], which is not relevant to
+# this code.
+with warnings.catch_warnings():
+    warnings.simplefilter(action='ignore', category=FutureWarning)
+    _UPDATED_AVRO_ENCODER_INPUT.loc[:, 'creation_date_et'] = [
+        '2021-01-03', '2021-02-03', None]
 _UPDATED_AVRO_ENCODER_INPUT = pd.concat([
     _UPDATED_AVRO_ENCODER_INPUT.astype({'creation_date_et': 'string'}),
     pd.DataFrame(

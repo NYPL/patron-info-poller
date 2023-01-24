@@ -1,9 +1,7 @@
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-
 import os
 import pandas as pd
 import requests
+import warnings
 
 from helpers.address_helper import reformat_malformed_addresses
 from helpers.log_helper import create_log
@@ -46,7 +44,14 @@ class GeocoderApiClient:
         retry_address_df = input_address_df.loc[retry_indices]
         retry_address_df = retry_address_df.apply(
             reformat_malformed_addresses, axis=1)
-        geoids.update(self._get_geoids_with_single_request(retry_address_df))
+
+        # Ignore the FutureWarning caused by the pandas update method, which is
+        # not relevant to this code.
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            geoids.update(
+                self._get_geoids_with_single_request(retry_address_df))
+
         return geoids
 
     def _get_geoids_with_single_request(self, address_df):

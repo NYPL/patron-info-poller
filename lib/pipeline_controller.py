@@ -1,9 +1,7 @@
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-
 import datetime
 import os
 import pandas as pd
+import warnings
 
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
@@ -135,11 +133,15 @@ class PipelineController:
             dtype='string')
 
         # Remove records for any patron id that has already been processed and
-        # update the total set of processed ids
+        # update the total set of processed ids, ignoring the FutureWarning
+        # caused by the pandas update  method, which is not relevant to this
+        # code.
         unseen_records_mask = ~unprocessed_sierra_df[
             'patron_id_plaintext'].isin(self.processed_ids)
         processed_df = unprocessed_sierra_df[unseen_records_mask]
-        self.processed_ids.update(processed_df['patron_id_plaintext'])
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            self.processed_ids.update(processed_df['patron_id_plaintext'])
 
         # Reduce the dataframe to only one row per patron_id, keeping the row
         # with the lowest display_order and patron_record_address_type_id.
@@ -170,10 +172,13 @@ class PipelineController:
             processed_df[['patron_id', 'geoid']] = None
 
         # For every row not already in Redshift, geocode it and obfuscate the
-        # patron id
+        # patron id, ignoring the FutureWarning caused by the pandas update
+        # method, which is not relevant to this code.
         unknown_patrons_df = processed_df[pd.isnull(processed_df['patron_id'])]
         unknown_patrons_df = self._process_unknown_patrons(unknown_patrons_df)
-        processed_df.update(unknown_patrons_df)
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            processed_df.update(unknown_patrons_df)
 
         # Modify the data to match what's expected by the PatronInfo Avro
         # schema
@@ -291,10 +296,14 @@ class PipelineController:
         geocoded, sends them to the geocoder API and obfuscates their patron
         ids
         """
-        # Get geoids from geocoder API and join with processed Sierra data
+        # Get geoids from geocoder API and join with processed Sierra data,
+        # ignoring the FutureWarning caused by the pandas update method, which
+        # is not relevant to this code.
         unknown_patrons_df_copy = unknown_patrons_df.copy()
         geoids = self.geocoder_client.get_geoids(unknown_patrons_df_copy)
-        unknown_patrons_df_copy.update(geoids)
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            unknown_patrons_df_copy.update(geoids)
 
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
