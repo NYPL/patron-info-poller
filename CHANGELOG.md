@@ -1,3 +1,9 @@
+## 2022-02-07 -- v0.0.5
+### Fixed
+- Open new database connections each iteration to prevent
+idle_in_transaction_session_timeout
+- Add behavior for if Sierra returns no results
+
 ## 2022-01-19 -- v0.0.4
 ### Added
 - Added Github actions workflows for running tests and deploying to QA and
