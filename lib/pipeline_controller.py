@@ -256,8 +256,9 @@ class PipelineController:
         Redshift. If they do, take the geoid and obfuscated patron id from
         Redshift and join it with the original Sierra dataframe.
         """
-        address_hashes_str = ','.join(
-            str(all_patrons_df['address_hash'].values)[1:-1].split())
+        address_hashes_str = "','".join(
+            all_patrons_df['address_hash'].to_string(index=False).split())
+        address_hashes_str = "'" + address_hashes_str + "'"
         redshift_raw_data = redshift_client.execute_query(
             build_redshift_address_query(address_hashes_str))
         redshift_df = pd.DataFrame(
