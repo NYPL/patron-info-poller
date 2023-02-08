@@ -69,12 +69,6 @@ class PipelineController:
             raise PipelineControllerError(
                 'run_pipeline called with bad pipeline mode: {}'.format(mode))
 
-        sierra_client = DbClient(DbMode.SIERRA)
-        if mode == PipelineMode.NEW_PATRONS:
-            redshift_client = None
-        else:
-            redshift_client = DbClient(DbMode.REDSHIFT)
-
         batch_number = 1
         finished = False
         while not finished:
@@ -87,64 +81,71 @@ class PipelineController:
                 '{state}'.format(
                     mode=mode, batch=batch_number, state=self.poller_state))
             if mode == PipelineMode.DELETED_PATRONS:
-                last_record = self._run_deleted_patrons_single_iteration(
-                    sierra_client, redshift_client)
+                last_record = self._run_deleted_patrons_single_iteration()
             else:
-                last_record = self._run_active_patrons_single_iteration(
-                    mode, sierra_client, redshift_client)
+                last_record = self._run_active_patrons_single_iteration(mode)
             self.logger.info(
                 'Finished processing {mode} patrons batch {batch}'.format(
                     mode=mode, batch=batch_number))
 
-            # Cache the new state in S3
-            self._set_poller_state(mode, last_record)
+            # Cache the new state in S3 if necessary and check for more records
+            if last_record is not None:
+                self._set_poller_state(mode, last_record)
+                no_more_records = (last_record.name + 1) < int(
+                    os.environ['SIERRA_BATCH_SIZE'])
+            else:
+                no_more_records = True
 
             # Check if processing is complete
             reached_max_batches = self.has_max_batches and batch_number >= int(
                 os.environ['MAX_BATCHES'])
-            no_more_records = (last_record.name + 1) < int(
-                os.environ['SIERRA_BATCH_SIZE'])
             finished = reached_max_batches or no_more_records
             batch_number += 1
 
-        # Close database connections
         self.logger.info((
-            'Finished processing {mode} patrons session with {batch} batches, '
-            'closing database connections').format(
-            mode=mode, batch=batch_number-1))
-        sierra_client.close_connection()
-        if (mode == PipelineMode.UPDATED_PATRONS):
-            redshift_client.close_connection()
+            'Finished processing {mode} patrons session with {batch} batches')
+            .format(mode=mode, batch=batch_number-1))
 
-    def _run_active_patrons_single_iteration(
-            self, mode, sierra_client, redshift_client):
+    def _run_active_patrons_single_iteration(self, mode):
         """
         Runs the full pipeline a single time for either newly created
         patrons or for recently updated patrons
         """
+        # Open database connections
+        redshift_client = None
+        sierra_client = DbClient(DbMode.SIERRA)
+        if mode == PipelineMode.UPDATED_PATRONS:
+            redshift_client = DbClient(DbMode.REDSHIFT)
+
         # Get data from Sierra
         query = (
             build_new_patrons_query(self.poller_state['creation_dt'])
             if mode == PipelineMode.NEW_PATRONS else
             build_updated_patrons_query(self.poller_state['update_dt']))
         sierra_raw_data = sierra_client.execute_query(query)
+        sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
             data=sierra_raw_data, columns=_SIERRA_COLUMNS_MAP[mode],
             dtype='string')
 
-        # Remove records for any patron id that has already been processed and
-        # update the total set of processed ids, ignoring the FutureWarning
-        # caused by the pandas update  method, which is not relevant to this
-        # code.
+        # Remove records for any patron ids that have already been processed
         unseen_records_mask = ~unprocessed_sierra_df[
             'patron_id_plaintext'].isin(self.processed_ids)
-        processed_df = unprocessed_sierra_df[unseen_records_mask]
+        processed_df = unprocessed_sierra_df[unseen_records_mask].reset_index(
+            drop=True)
+
+        # If there are no unprocessed patron ids left, return. Otherwise,
+        # update the total set of processed ids, ignoring the FutureWarning
+        # caused by the pandas update method, which is not relevant to this
+        # code.
+        if len(processed_df) == 0:
+            return None
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
             self.processed_ids.update(processed_df['patron_id_plaintext'])
 
         # Reduce the dataframe to only one row per patron_id, keeping the row
-        # with the lowest display_order and patron_record_address_type_id.
+        # with the lowest display_order and patron_record_address_type_id
         distinct_records_mask = ~processed_df.duplicated('patron_id_plaintext',
                                                          keep='first')
         processed_df = processed_df[distinct_records_mask].reset_index(
@@ -168,6 +169,7 @@ class PipelineController:
         if mode == PipelineMode.UPDATED_PATRONS:
             processed_df = self._find_known_addreses(processed_df,
                                                      redshift_client)
+            redshift_client.close_connection()
         else:
             processed_df[['patron_id', 'geoid']] = None
 
@@ -203,23 +205,37 @@ class PipelineController:
 
         return unprocessed_sierra_df.iloc[-1]
 
-    def _run_deleted_patrons_single_iteration(
-            self, sierra_client, redshift_client):
+    def _run_deleted_patrons_single_iteration(self):
         """
         Runs the full pipeline a single time for recently deleted patrons
         """
+        # Open database connections
+        sierra_client = DbClient(DbMode.SIERRA)
+        redshift_client = DbClient(DbMode.REDSHIFT)
+
         # Get data from Sierra
         query = build_deleted_patrons_query(self.poller_state['deletion_date'])
         sierra_raw_data = sierra_client.execute_query(query)
+        sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
             data=sierra_raw_data, dtype='string',
             columns=_SIERRA_COLUMNS_MAP[PipelineMode.DELETED_PATRONS])
 
-        # Remove records for any patron id that has already been processed
+        # Remove records for any patron ids that have already been processed
         unseen_records_mask = ~unprocessed_sierra_df[
             'patron_id_plaintext'].isin(self.processed_ids)
         processed_df = unprocessed_sierra_df[unseen_records_mask].reset_index(
             drop=True)
+
+        # If there are no unprocessed patron ids left, return. Otherwise,
+        # update the total set of processed ids, ignoring the FutureWarning
+        # caused by the pandas update method, which is not relevant to this
+        # code.
+        if len(processed_df) == 0:
+            return None
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            self.processed_ids.update(processed_df['patron_id_plaintext'])
 
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
@@ -232,6 +248,7 @@ class PipelineController:
         # it with the deletion date
         processed_df = self._find_deleted_patrons(processed_df,
                                                   redshift_client)
+        redshift_client.close_connection()
 
         # Modify the data to match what's expected by the PatronInfo Avro
         # schema
@@ -277,8 +294,9 @@ class PipelineController:
         Finds the Redshift data for recently deleted patrons and joins it with
         the deletion date from Sierra.
         """
-        patron_ids_str = ','.join(
-            str(deleted_patrons_df['patron_id'].values)[1:-1].split())
+        patron_ids_str = "','".join(
+            deleted_patrons_df['patron_id'].to_string(index=False).split())
+        patron_ids_str = "'" + patron_ids_str + "'"
         redshift_raw_data = redshift_client.execute_query(
             build_redshift_patron_query(patron_ids_str))
         redshift_df = pd.DataFrame(

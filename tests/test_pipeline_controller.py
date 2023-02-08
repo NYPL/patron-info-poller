@@ -198,10 +198,6 @@ class TestMain:
                 {'creation_timestamp': _CREATION_DT.format(i)}, name=2)
                 for i in range(2, 5)])
 
-        mock_sierra_client = mocker.MagicMock()
-        mocker.patch('lib.pipeline_controller.DbClient',
-                     return_value=mock_sierra_client)
-
         test_instance.s3_client.fetch_state.side_effect = [
             {'creation_dt': _CREATION_DT.format(i),
              'update_dt': _UPDATE_DT.format(1),
@@ -213,13 +209,12 @@ class TestMain:
         assert test_instance._run_active_patrons_single_iteration.call_count \
             == 3
         test_instance._run_active_patrons_single_iteration.assert_called_with(
-            PipelineMode.NEW_PATRONS, mock_sierra_client, None)
+            PipelineMode.NEW_PATRONS)
         test_instance.s3_client.set_state.assert_has_calls([mocker.call(
             {'creation_dt': _CREATION_DT.format(i),
              'update_dt': _UPDATE_DT.format(1),
              'deletion_date': _DELETION_DATE.format(1)}) for i in range(2, 5)]
         )
-        mock_sierra_client.close_connection.assert_called_once()
         del os.environ['MAX_BATCHES']
 
     def test_run_updated_patrons_pipeline(self, test_instance, mocker):
@@ -233,11 +228,6 @@ class TestMain:
                 pd.Series(
                     {'last_updated_timestamp': _UPDATE_DT.format(4)}, name=1)])
 
-        mock_sierra_client = mocker.MagicMock()
-        mock_redshift_client = mocker.MagicMock()
-        mocker.patch('lib.pipeline_controller.DbClient',
-                     side_effect=[mock_sierra_client, mock_redshift_client])
-
         test_instance.s3_client.fetch_state.side_effect = [
             {'creation_dt': _CREATION_DT.format(1),
              'update_dt': _UPDATE_DT.format(i),
@@ -249,15 +239,12 @@ class TestMain:
         assert test_instance._run_active_patrons_single_iteration.call_count \
             == 3
         test_instance._run_active_patrons_single_iteration.assert_called_with(
-            PipelineMode.UPDATED_PATRONS, mock_sierra_client,
-            mock_redshift_client)
+            PipelineMode.UPDATED_PATRONS)
         test_instance.s3_client.set_state.assert_has_calls([mocker.call(
             {'creation_dt': _CREATION_DT.format(1),
              'update_dt': _UPDATE_DT.format(i),
              'deletion_date': _DELETION_DATE.format(1)}) for i in range(2, 5)]
         )
-        mock_sierra_client.close_connection.assert_called_once()
-        mock_redshift_client.close_connection.assert_called_once()
 
     def test_run_deleted_patrons_pipeline(self, test_instance, mocker):
         os.environ['MAX_BATCHES'] = '4'
@@ -273,11 +260,6 @@ class TestMain:
                 pd.Series(
                     {'deletion_date_et': _DELETION_DATE.format(4)}, name=1)])
 
-        mock_sierra_client = mocker.MagicMock()
-        mock_redshift_client = mocker.MagicMock()
-        mocker.patch('lib.pipeline_controller.DbClient',
-                     side_effect=[mock_sierra_client, mock_redshift_client])
-
         test_instance.s3_client.fetch_state.side_effect = [
             {'creation_dt': _CREATION_DT.format(1),
              'update_dt': _UPDATE_DT.format(1),
@@ -288,15 +270,52 @@ class TestMain:
         assert test_instance.s3_client.fetch_state.call_count == 3
         assert test_instance._run_deleted_patrons_single_iteration.call_count \
             == 3
-        test_instance._run_deleted_patrons_single_iteration.assert_called_with(
-            mock_sierra_client, mock_redshift_client)
         test_instance.s3_client.set_state.assert_has_calls([mocker.call(
             {'creation_dt': _CREATION_DT.format(1),
              'update_dt': _UPDATE_DT.format(1),
              'deletion_date': _DELETION_DATE.format(i)}) for i in range(2, 5)]
         )
-        mock_sierra_client.close_connection.assert_called_once()
         del os.environ['MAX_BATCHES']
+
+    def test_run_active_pipeline_no_results(self, test_instance, mocker):
+        test_instance.s3_client.fetch_state.return_value = {
+            'creation_dt': _CREATION_DT.format(1),
+            'update_dt': _UPDATE_DT.format(1),
+            'deletion_date': _DELETION_DATE.format(1)}
+
+        mocker.patch('lib.pipeline_controller.build_new_patrons_query',
+                     return_value='NEW PATRONS QUERY')
+
+        mock_sierra_client = mocker.MagicMock()
+        mock_sierra_client.execute_query.return_value = []
+        mocker.patch('lib.pipeline_controller.DbClient',
+                     return_value=mock_sierra_client)
+
+        test_instance.run_pipeline(PipelineMode.NEW_PATRONS)
+
+        assert test_instance.s3_client.fetch_state.call_count == 1
+        assert test_instance.s3_client.set_state.call_count == 0
+        mock_sierra_client.close_connection.assert_called_once()
+
+    def test_run_deleted_pipeline_no_results(self, test_instance, mocker):
+        test_instance.s3_client.fetch_state.return_value = {
+            'creation_dt': _CREATION_DT.format(1),
+            'update_dt': _UPDATE_DT.format(1),
+            'deletion_date': _DELETION_DATE.format(1)}
+
+        mocker.patch('lib.pipeline_controller.build_deleted_patrons_query',
+                     return_value='DELETED PATRONS QUERY')
+
+        mock_sierra_client = mocker.MagicMock()
+        mock_sierra_client.execute_query.return_value = []
+        mocker.patch('lib.pipeline_controller.DbClient',
+                     return_value=mock_sierra_client)
+
+        test_instance.run_pipeline(PipelineMode.DELETED_PATRONS)
+
+        assert test_instance.s3_client.fetch_state.call_count == 1
+        assert test_instance.s3_client.set_state.call_count == 0
+        mock_sierra_client.close_connection.assert_called_once()
 
     def test_run_new_patrons_single_iteration(self, test_instance, mocker):
         # This input check implicitly tests that the raw data is loaded into a
@@ -325,14 +344,16 @@ class TestMain:
 
         mock_sierra_client = mocker.MagicMock()
         mock_sierra_client.execute_query.return_value = _NEW_SIERRA_RESULTS
+        mocker.patch('lib.pipeline_controller.DbClient',
+                     return_value=mock_sierra_client)
 
         assert_series_equal(
             test_instance._run_active_patrons_single_iteration(
-                PipelineMode.NEW_PATRONS, mock_sierra_client, None),
-            _LAST_NEW_SIERRA_ROW)
+                PipelineMode.NEW_PATRONS), _LAST_NEW_SIERRA_ROW)
 
         mock_sierra_client.execute_query.assert_called_once_with(
             'NEW PATRONS QUERY')
+        mock_sierra_client.close_connection.assert_called_once()
 
         # This input check implicitly tests that the geoids have been joined,
         # the datatypes have been converted, and the ids have been obfuscated
@@ -381,17 +402,19 @@ class TestMain:
         mock_redshift_client = mocker.MagicMock()
         mock_redshift_client.execute_query.return_value = \
             _REDSHIFT_ADDRESS_RESULTS
+        mocker.patch('lib.pipeline_controller.DbClient',
+                     side_effect=[mock_sierra_client, mock_redshift_client])
 
         assert_series_equal(
             test_instance._run_active_patrons_single_iteration(
-                PipelineMode.UPDATED_PATRONS, mock_sierra_client,
-                mock_redshift_client),
-            _LAST_UPDATED_SIERRA_ROW)
+                PipelineMode.UPDATED_PATRONS), _LAST_UPDATED_SIERRA_ROW)
 
         mock_sierra_client.execute_query.assert_called_once_with(
             'UPDATED PATRONS QUERY')
+        mock_sierra_client.close_connection.assert_called_once()
         mock_redshift_client.execute_query.assert_called_once_with(
             'REDSHIFT ADDRESS QUERY')
+        mock_redshift_client.close_connection.assert_called_once()
 
         # This input check implicitly tests that the geoids have been joined,
         # the datatypes have been converted, and the ids have been obfuscated
@@ -425,16 +448,19 @@ class TestMain:
         mock_redshift_client = mocker.MagicMock()
         mock_redshift_client.execute_query.return_value = \
             _REDSHIFT_PATRON_RESULTS
+        mocker.patch('lib.pipeline_controller.DbClient',
+                     side_effect=[mock_sierra_client, mock_redshift_client])
 
         assert_series_equal(
-            test_instance._run_deleted_patrons_single_iteration(
-                mock_sierra_client, mock_redshift_client),
+            test_instance._run_deleted_patrons_single_iteration(),
             _LAST_DELETED_SIERRA_ROW)
 
         mock_sierra_client.execute_query.assert_called_once_with(
             'DELETED PATRONS QUERY')
+        mock_sierra_client.close_connection.assert_called_once()
         mock_redshift_client.execute_query.assert_called_once_with(
             'REDSHIFT PATRON QUERY')
+        mock_redshift_client.close_connection.assert_called_once()
 
         # This input check implicitly tests that the Sierra and Redshift
         # dataframes have been joined and the datatypes have been converted
