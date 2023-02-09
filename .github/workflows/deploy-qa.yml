@@ -55,4 +55,4 @@ jobs:
       
       - name: Force ECS Update
         run: |
-          aws ecs update-service --cluster patron-info-poller-qa --service patron-info-poller-app-qa --force-new-deployment
+          aws ecs update-service --cluster patron-info-poller-qa --service patron-info-poller-qa --force-new-deployment
