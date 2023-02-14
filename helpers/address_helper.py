@@ -1,6 +1,6 @@
 import re
 
-from helpers.log_helper import create_log
+from nypl_py_utils.functions.log_helper import create_log
 
 logger = create_log('address_helper')
 
@@ -130,7 +130,8 @@ def reformat_malformed_addresses(address_row):
         'address', 'city', 'region', 'postal_code']]
     input_row = address_row.fillna('').str.upper()
     if not input_row.equals(results_row):
-        logger.info(('Changed geocoder address input from {input} to: {output}'
-                     ).format(input=input_row, output=results_row))
+        logger.debug((
+            'Changed geocoder address input from:\n{input} to:\n{output}')
+            .format(input=input_row, output=results_row))
 
     return processed_address_row[['address', 'city', 'region', 'postal_code']]

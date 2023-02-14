@@ -16,26 +16,50 @@ docker image build -t patron-info-poller:local .
 docker container run -e ENVIRONMENT=<env> -e AWS_ACCESS_KEY_ID=<aws_key> -e AWS_SECRET_ACCESS_KEY=<aws_secret_key> patron-info-poller:local
 ```
 
+## Git workflow
+This repo uses the [Main-QA-Production](https://github.com/NYPL/engineering-general/blob/main/standards/git-workflow.md#main-qa-production) git workflow.
+
+[`main`](https://github.com/NYPL/patron-info-poller/tree/main) has the latest and greatest commits, [`qa`](https://github.com/NYPL/patron-info-poller/tree/qa) has what's in our QA environment, and [`production`](https://github.com/NYPL/patron-info-poller/tree/production) has what's in our production environment.
+
+### Ideal Workflow
+- Cut a feature branch off of `main`
+- Commit changes to your feature branch
+- File a pull request against `main` and assign a reviewer
+  - In order for the PR to be accepted, it must pass all unit tests, have no lint issues, and update the CHANGELOG (or contain the Skip-Changelog label in GitHub)
+- After the PR is accepted, merge into `main`
+- Merge `main` > `qa`
+- Deploy app to QA and confirm it works
+- Merge `qa` > `production`
+- Deploy app to production and confirm it works
+
+## Deployment
+The poller is deployed as an AWS ECS service to [qa](https://us-east-1.console.aws.amazon.com/ecs/home?region=us-east-1#/clusters/patron-info-poller-qa/services) and [prod](https://us-east-1.console.aws.amazon.com/ecs/home?region=us-east-1#/clusters/patron-info-poller-production/services) environments. To upload a new QA version of this service, create a new release in GitHub off of the `qa` branch and tag it `qa-vX.X.X`. The GitHub Actions deploy-qa workflow will then deploy the code to ECR and update the ECS service appropriately. To deploy to production, create the release from the `production` branch and tag it `production-vX.X.X`. To trigger the app to run immediately (rather than waiting for the next scheduled event), run:
+```bash
+aws ecs run-task --cluster patron-info-poller-qa --task-definition  patron-info-poller-qa:4 --count 1 --region us-east-1 --profile nypl-digital-dev
+```
+
 ## Environment variables
+The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) plus all of the encrypted variables in each environment file are required by the poller to run. There are then seven additional optional variables that can be used for development purposes -- `devel.yaml` sets each of these. Note that the `qa_env` and `production_env` files are actually read by the deployed service, so do not change these files unless you want to change how the service will behave in the wild -- these are not meant for local testing.
 
 | Name        | Notes           |
 | ------------- | ------------- |
 | `AWS_REGION` | Always `us-east-1`. The AWS region used for the Redshift, S3, KMS, and Kinesis clients. |
 | `SIERRA_DB_PORT` | Always `1032` |
 | `SIERRA_DB_NAME` | Always `iii` |
-| `SIERRA_DB_HOST` | Obfuscated Sierra host (either test, QA, or prod) |
-| `SIERRA_DB_USER` | Obfuscated Sierra user. There is only one user, so this is always the same. |
-| `SIERRA_DB_PASSWORD` | Obfuscated Sierra password for the user. There is only one user, so this is always the same. |
-| `REDSHIFT_CLUSTER` | Always `nypl-dw-production` |
-| `REDSHIFT_DB_NAME` | Which Redshift database to query (either `dev` or `production`) |
+| `SIERRA_DB_HOST` | Encrypted Sierra host (either test, QA, or prod) |
+| `SIERRA_DB_USER` | Encrypted Sierra user. There is only one user, so this is always the same. |
+| `SIERRA_DB_PASSWORD` | Encrypted Sierra password for the user. There is only one user, so this is always the same. |
+| `REDSHIFT_DB_NAME` | Which Redshift database to query (either `dev`, `qa`, or `production`) |
 | `REDSHIFT_TABLE` | Which Redshift table to query |
-| `REDSHIFT_DB_USER` | Obfuscated Redshift user |
-| `BCRYPT_SALT` | Obfuscated bcrypt salt |
+| `REDSHIFT_DB_HOST` | Encrypted Redshift cluster endpoint |
+| `REDSHIFT_DB_USER` | Encrypted Redshift user |
+| `REDSHIFT_DB_PASSWORD` | Encrypted Redshift password for the user |
+| `KINESIS_STREAM_ARN` | Encrypted ARN for the Kinesis stream the poller sends the encoded data to |
+| `BCRYPT_SALT` | Encrypted bcrypt salt |
 | `GEOCODER_API_BASE_URL` | Always `https://geocoding.geo.census.gov/geocoder/geographies/addressbatch`. API endpoint to which the poller sends batch geocoding requests. |
 | `GEOCODER_API_BENCHMARK` | Always `Public_AR_Current`. Which dataset should be used to address match. `Public_AR_Current` automatically uses the most recent. |
 | `GEOCODER_API_VINTAGE` | Always `Current_Current`. Which dataset should be used to geocode matched addresses. `Current_Current` automatically uses the most recent. |
 | `PATRON_INFO_SCHEMA_URL` | Platform API endpoint from which to retrieve the PatronInfo Avro schema |
-| `KINESIS_STREAM_NAME` | Name of the Kinesis stream to which the poller sends the encoded data (either PatronInfo-qa or PatronInfo-production) |
 | `KINESIS_BATCH_SIZE` | How many records should be sent to Kinesis at once. Kinesis supports up to 500 records per batch. |
 | `S3_BUCKET` | S3 bucket for the cache. This differs between QA and prod and should be empty when not using the cache locally. |
 | `S3_RESOURCE` | Name of the resource for the S3 cache. This differs between QA and prod and should be empty when not using the cache locally. |

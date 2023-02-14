@@ -1,3 +1,10 @@
+## 2022-02-14 -- v0.0.6
+### Added
+- Replaced generic classes/functions with nypl-py-utils
+### Fixed
+- Use connection pooling (implemented in nypl-py-utils) to prevent having to
+open and close the Sierra connection each iteration
+
 ## 2022-02-07 -- v0.0.5
 ### Fixed
 - Open new database connections each iteration to prevent

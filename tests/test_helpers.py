@@ -19,7 +19,7 @@ class TestHelpers:
         'GEOCODER_API_BENCHMARK': 'test_geocoder_benchmark',
         'GEOCODER_API_VINTAGE': 'test_geocoder_vintage',
         'PATRON_INFO_SCHEMA_URL': 'https://test_schema_url',
-        'KINESIS_STREAM_NAME': 'test_kinesis_stream',
+        'KINESIS_STREAM_ARN': 'test_kinesis_stream',
         'KINESIS_BATCH_SIZE': '2',
         'S3_BUCKET': 'test_s3_bucket',
         'S3_RESOURCE': 'test_s3_resource',

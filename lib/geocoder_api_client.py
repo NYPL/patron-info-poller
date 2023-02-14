@@ -4,8 +4,8 @@ import requests
 import warnings
 
 from helpers.address_helper import reformat_malformed_addresses
-from helpers.log_helper import create_log
 from io import BytesIO, TextIOWrapper
+from nypl_py_utils.functions.log_helper import create_log
 from requests.adapters import HTTPAdapter, Retry
 from requests.exceptions import RequestException
 
