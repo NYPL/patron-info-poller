@@ -1,17 +1,17 @@
-## 2022-02-14 -- v0.0.6
+## 2023-02-14 -- v0.0.6
 ### Added
 - Replaced generic classes/functions with nypl-py-utils
 ### Fixed
 - Use connection pooling (implemented in nypl-py-utils) to prevent having to
 open and close the Sierra connection each iteration
 
-## 2022-02-07 -- v0.0.5
+## 2023-02-07 -- v0.0.5
 ### Fixed
 - Open new database connections each iteration to prevent
 idle_in_transaction_session_timeout
 - Add behavior for if Sierra returns no results
 
-## 2022-01-19 -- v0.0.4
+## 2023-01-19 -- v0.0.4
 ### Added
 - Added Github actions workflows for running tests and deploying to QA and
 production
