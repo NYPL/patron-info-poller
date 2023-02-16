@@ -1,14 +1,8 @@
-avro
-bcrypt
-boto3
 flake8
-freezegun
 numpy
+nypl-py-utils==0.0.5
 pandas
-psycopg2
 pytest
 pytest-mock
-pyyaml
-redshift_connector
 requests
 requests-mock

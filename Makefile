@@ -18,4 +18,4 @@ test:
 	pytest
 
 lint:
-	flake8
+	flake8 --exclude *env
