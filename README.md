@@ -64,7 +64,7 @@ The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) 
 | `S3_BUCKET` | S3 bucket for the cache. This differs between QA and prod and should be empty when not using the cache locally. |
 | `S3_RESOURCE` | Name of the resource for the S3 cache. This differs between QA and prod and should be empty when not using the cache locally. |
 | `SIERRA_BATCH_SIZE` | How many patron ids should be queried from Sierra at once |
-| `LOG_LEVEL` (optional) | What level of logs should be output. Set to `warning` by default. |
+| `LOG_LEVEL` (optional) | What level of logs should be output. Set to `info` by default. |
 | `MAX_BATCHES` (optional) | The maximum number of times the poller should poll Sierra per session. If this is not set, the poller will continue querying until all new records in Sierra have been processed. |
 | `IGNORE_CACHE` (optional) | Whether fetching and setting the state from S3 should not be done. If this is true, the `STARTING_CREATION_DT`, `STARTING_UPDATE_DT`, and `STARTING_DELETION_DATE` environment variables will be used for the initial state (or `2020-01-01 00:00:00-05` by default). |
 | `BACKFILL` (optional) | Whether only the new patrons routine should be run. When `MAX_BATCHES` is not set and `STARTING_CREATION_DT` is, this is used to backfill data. |
