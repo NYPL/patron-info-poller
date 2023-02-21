@@ -4,6 +4,10 @@ on:
   release:
     types: [ released ]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   check_production_tag:
     name: Check if the release is tagged as production
@@ -31,8 +35,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1-node16
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::946183545209:role/GithubActionsDeployerRole
           aws-region: us-east-1
 
       - name: Login to Amazon ECR
@@ -52,4 +55,4 @@ jobs:
       
       - name: Force ECS Update
         run: |
-          aws ecs update-service --cluster patron-info-poller-production --service patron-info-poller-app-production --force-new-deployment
+          aws ecs update-service --cluster patron-info-poller-production --service patron-info-poller-production --force-new-deployment
