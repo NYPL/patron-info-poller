@@ -10,7 +10,7 @@ PLAINTEXT_VARIABLES:
     GEOCODER_API_VINTAGE: Current_Current
     PATRON_INFO_SCHEMA_URL: https://platform.nypl.org/api/v0.1/current-schemas/PatronInfo
     KINESIS_BATCH_SIZE: 500
-    S3_BUCKET: bic-poller-states
+    S3_BUCKET: bic-poller-states-production
     S3_RESOURCE: patron_info_poller_state.json
     SIERRA_BATCH_SIZE: 10000
     LOG_LEVEL: info
