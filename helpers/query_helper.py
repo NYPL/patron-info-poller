@@ -57,14 +57,14 @@ _DELETED_PATRONS_QUERY = '''
 
 _REDSHIFT_ADDRESS_QUERY = '''
     SELECT address_hash, patron_id, geoid
-    FROM public.{redshift_table}
+    FROM {redshift_table}
     WHERE address_hash IN ({address_hashes})
 '''
 
 _REDSHIFT_PATRON_QUERY = '''
     SELECT patron_id, address_hash, postal_code, geoid, creation_date_et,
         circ_active_date_et, ptype_code, pcode3, patron_home_library_code
-    FROM public.{redshift_table}
+    FROM {redshift_table}
     WHERE patron_id IN ({patron_ids})
 '''
 
