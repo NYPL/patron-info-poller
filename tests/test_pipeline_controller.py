@@ -178,12 +178,20 @@ class TestMain:
 
     @pytest.fixture
     def test_instance(self, mocker):
+        def mock_multiprocess_mapper(method, input_df):
+            return [method(row) for row in input_df]
+
         mocker.patch('lib.pipeline_controller.S3Client')
         mocker.patch('lib.pipeline_controller.PostgreSQLClient')
         mocker.patch('lib.pipeline_controller.RedshiftClient')
         mocker.patch('lib.pipeline_controller.GeocoderApiClient')
         mocker.patch('lib.pipeline_controller.KinesisClient')
         mocker.patch('lib.pipeline_controller.AvroEncoder')
+
+        mock_pool = mocker.MagicMock()
+        mock_pool.map.side_effect = mock_multiprocess_mapper
+        mocker.patch('lib.pipeline_controller.ProcessPoolExecutor.__enter__',
+                     return_value=mock_pool)
         return PipelineController()
 
     def test_run_new_patrons_pipeline(self, test_instance, mocker):

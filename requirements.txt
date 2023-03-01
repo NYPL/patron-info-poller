@@ -1,6 +1,6 @@
 flake8
 numpy
-nypl-py-utils==0.0.6
+nypl-py-utils==0.0.7
 pandas
 pytest
 pytest-mock

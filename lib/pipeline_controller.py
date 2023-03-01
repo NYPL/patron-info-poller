@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import warnings
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from enum import Enum
 from helpers.query_helper import (build_deleted_patrons_query,
                                   build_new_patrons_query,
@@ -177,7 +177,7 @@ class PipelineController:
             processed_df['city'].fillna('') + '_' +
             processed_df['region'].fillna('') + '_' +
             processed_df['postal_code'].fillna(''))
-        with ThreadPoolExecutor() as executor:
+        with ProcessPoolExecutor() as executor:
             processed_df['address_hash'] = list(executor.map(
                 obfuscate, processed_df['address_hash_plaintext']))
 
@@ -252,7 +252,7 @@ class PipelineController:
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(processed_df)))
-        with ThreadPoolExecutor() as executor:
+        with ProcessPoolExecutor() as executor:
             processed_df['patron_id'] = list(executor.map(
                 obfuscate, processed_df['patron_id_plaintext']))
 
@@ -332,7 +332,7 @@ class PipelineController:
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(unknown_patrons_df_copy)))
-        with ThreadPoolExecutor() as executor:
+        with ProcessPoolExecutor() as executor:
             unknown_patrons_df_copy['patron_id'] = list(executor.map(
                 obfuscate, unknown_patrons_df_copy['patron_id_plaintext']))
         return unknown_patrons_df_copy
