@@ -1,6 +1,6 @@
 flake8
 numpy
-nypl-py-utils==0.0.7
+nypl-py-utils[avro-encoder,kinesis-client,postgresql-client,redshift-client,s3-client,config-helper,obfuscation-helper]==1.0.0
 pandas
 pytest
 pytest-mock

@@ -1,9 +1,10 @@
-FROM python:3.10
+FROM python:3.9
 ADD . /src
 WORKDIR /src
 
 COPY requirements.txt ./
-RUN pip3 install -r requirements.txt
+RUN pip install --upgrade pip && \
+	pip install -r requirements.txt
 
 COPY . .
 CMD [ "python3", "./main.py"]

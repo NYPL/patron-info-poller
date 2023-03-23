@@ -223,7 +223,6 @@ class TestMain:
         )
         test_instance.s3_client.close.assert_called_once()
         test_instance.kinesis_client.close.assert_called_once()
-        test_instance.sierra_client.close_connection.assert_called_once()
         del os.environ['MAX_BATCHES']
 
     def test_run_updated_patrons_pipeline(self, test_instance, mocker):
@@ -256,8 +255,6 @@ class TestMain:
         )
         test_instance.s3_client.close.assert_called_once()
         test_instance.kinesis_client.close.assert_called_once()
-        test_instance.sierra_client.close_connection.assert_called_once()
-        test_instance.redshift_client.close_connection.assert_called_once()
 
     def test_run_deleted_patrons_pipeline(self, test_instance, mocker):
         os.environ['MAX_BATCHES'] = '4'
@@ -290,8 +287,6 @@ class TestMain:
         )
         test_instance.s3_client.close.assert_called_once()
         test_instance.kinesis_client.close.assert_called_once()
-        test_instance.sierra_client.close_connection.assert_called_once()
-        test_instance.redshift_client.close_connection.assert_called_once()
         del os.environ['MAX_BATCHES']
 
     def test_run_active_pipeline_no_results(self, test_instance, mocker):
@@ -306,8 +301,10 @@ class TestMain:
 
         test_instance.run_pipeline(PipelineMode.NEW_PATRONS)
 
-        assert test_instance.s3_client.fetch_cache.call_count == 1
-        assert test_instance.s3_client.set_cache.call_count == 0
+        test_instance.s3_client.fetch_cache.assert_called_once()
+        test_instance.s3_client.set_cache.assert_not_called()
+        test_instance.sierra_client.connect.assert_called_once()
+        test_instance.sierra_client.close_connection.assert_called_once()
 
     def test_run_deleted_pipeline_no_results(self, test_instance, mocker):
         test_instance.s3_client.fetch_cache.return_value = {
@@ -321,8 +318,10 @@ class TestMain:
 
         test_instance.run_pipeline(PipelineMode.DELETED_PATRONS)
 
-        assert test_instance.s3_client.fetch_cache.call_count == 1
-        assert test_instance.s3_client.set_cache.call_count == 0
+        test_instance.s3_client.fetch_cache.assert_called_once()
+        test_instance.s3_client.set_cache.assert_not_called()
+        test_instance.sierra_client.connect.assert_called_once()
+        test_instance.sierra_client.close_connection.assert_called_once()
 
     def test_run_new_patrons_single_iteration(self, test_instance, mocker):
         # This input check implicitly tests that the raw data is loaded into a
@@ -356,8 +355,10 @@ class TestMain:
             test_instance._run_active_patrons_single_iteration(
                 PipelineMode.NEW_PATRONS), _LAST_NEW_SIERRA_ROW)
 
+        test_instance.sierra_client.connect.assert_called_once()
         test_instance.sierra_client.execute_query.assert_called_once_with(
             'NEW PATRONS QUERY')
+        test_instance.sierra_client.close_connection.assert_called_once()
 
         # This input check implicitly tests that the geoids have been joined,
         # the datatypes have been converted, and the ids have been obfuscated
@@ -408,10 +409,15 @@ class TestMain:
             test_instance._run_active_patrons_single_iteration(
                 PipelineMode.UPDATED_PATRONS), _LAST_UPDATED_SIERRA_ROW)
 
+        test_instance.sierra_client.connect.assert_called_once()
         test_instance.sierra_client.execute_query.assert_called_once_with(
             'UPDATED PATRONS QUERY')
+        test_instance.sierra_client.close_connection.assert_called_once()
+
+        test_instance.redshift_client.connect.assert_called_once()
         test_instance.redshift_client.execute_query.assert_called_once_with(
             'REDSHIFT ADDRESS QUERY')
+        test_instance.redshift_client.close_connection.assert_called_once()
 
         # This input check implicitly tests that the geoids have been joined,
         # the datatypes have been converted, and the ids have been obfuscated
@@ -446,10 +452,15 @@ class TestMain:
             test_instance._run_deleted_patrons_single_iteration(),
             _LAST_DELETED_SIERRA_ROW)
 
+        test_instance.sierra_client.connect.assert_called_once()
         test_instance.sierra_client.execute_query.assert_called_once_with(
             'DELETED PATRONS QUERY')
+        test_instance.sierra_client.close_connection.assert_called_once()
+
+        test_instance.redshift_client.connect.assert_called_once()
         test_instance.redshift_client.execute_query.assert_called_once_with(
             'REDSHIFT PATRON QUERY')
+        test_instance.redshift_client.close_connection.assert_called_once()
 
         # This input check implicitly tests that the Sierra and Redshift
         # dataframes have been joined and the datatypes have been converted

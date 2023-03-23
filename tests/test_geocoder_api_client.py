@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from io import BytesIO
 from lib import GeocoderApiClient
+from requests.exceptions import ConnectionError
 from tests.test_helpers import TestHelpers
 
 
@@ -11,11 +11,11 @@ _API_RESPONSE_1 = ('"0","123 good address, New York, NY, 11111","Match","Exact",
                    '"1","456 bad address, Brooklyn, NY, 22222","No_Match"\n'
                    '"2","789 good address, Staten Island, NY, 33333-4444","Match","Non_Exact","789 matched address, Staten Island, NY, 33333-4444","-0.00000001,1.11111110","123456789","R","44","555","666666","7777"\n'  # noqa: E501
                    '"3","012 bad address, Bronx, NY, 55555-6666","No_Match"\n'
-                   '"4","345 tie address, Queens, NY, 77777","Tie"')
+                   '"4","345 tie address, Queens, NY, 77777","Tie"\n')
 
 _API_RESPONSE_2 = ('"1","456 bad address, Brooklyn, NY, 22222","No_Match"\n'
                    '"3","012 bad address, Bronx, NY, 55555-6666","No_Match"\n'
-                   '"4","345 tie address, Queens, NY, 77777","Tie","Non_Exact","345 matched address, Queens, NY, 77777","-0.00000001,1.11111110","123456789","R","88","999","000000","1111"')  # noqa: E501
+                   '"4","345 tie address, Queens, NY, 77777","Tie","Non_Exact","345 matched address, Queens, NY, 77777","-0.00000001,1.11111110","123456789","R","88","999","000000","1111"\n')  # noqa: E501
 
 _ADDRESS_DF = pd.DataFrame({'index': [4, 3, 2, 1, 0],
                             'address': ['123 good address', '456 bad address',
@@ -26,7 +26,8 @@ _ADDRESS_DF = pd.DataFrame({'index': [4, 3, 2, 1, 0],
                             'region': ['NY', 'NY', 'NY', 'NY', 'NY'],
                             'postal_code': ['11111', '22222', '33333-4444',
                                             '55555-6666', '77777'],
-                            'random_column': ['a', 'b', 'c', 'd', 'e']})
+                            'random_column': ['a', 'b', 'c', 'd', 'e']}
+                           ).set_index('index')
 
 
 class TestGeocoderApiClient:
@@ -48,13 +49,22 @@ class TestGeocoderApiClient:
             'https://test_geocoder_url?benchmark=test_geocoder_benchmark&vintage=test_geocoder_vintage',  # noqa: E501
             text=_API_RESPONSE_1)
 
-        test_stream = BytesIO(b'"0","123 good address","New York","NY","11111"\n'  # noqa: E501
-                              b'"1","456 bad address","Brooklyn","NY","22222"\n'  # noqa: E501
-                              b'"2","789 good address","Staten Island","NY","33333-4444"\n'  # noqa: E501
-                              b'"3","012 bad address","Bronx","NY","55555-6666"\n'  # noqa: E501
-                              b'"4","345 tie address","Queens","NY","77777"')
         assert test_instance._send_request(
-            test_stream) == bytes(_API_RESPONSE_1, 'utf-8')
+            _ADDRESS_DF) == bytes(_API_RESPONSE_1, 'utf-8')
+
+    def test_send_request_with_retries(self, requests_mock, test_instance):
+        _BIG_ADDRESS_DF = _ADDRESS_DF.reindex(list(range(2000)))
+        _FIRST_RESPONSE = '\n'.join(_API_RESPONSE_1.split('\n')[:2]) + '\n'
+        _SECOND_RESPONSE = '\n'.join(_API_RESPONSE_1.split('\n')[2:])
+
+        requests_mock.post(
+            'https://test_geocoder_url?benchmark=test_geocoder_benchmark&vintage=test_geocoder_vintage',  # noqa: E501
+            [{'exc': ConnectionError},
+             {'text': _FIRST_RESPONSE, 'status_code': 200},
+             {'text': _SECOND_RESPONSE, 'status_code': 200}])
+
+        assert test_instance._send_request(
+            _BIG_ADDRESS_DF) == bytes(_API_RESPONSE_1, 'utf-8')
 
     def test_get_geoids_with_single_request(self, requests_mock,
                                             test_instance):
