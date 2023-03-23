@@ -1,3 +1,10 @@
+## 2023-03-23 -- v0.0.7
+### Fixed
+- Use nypl-py-utils v1.0.0
+- Revert to using regular connections when querying Sierra and close each
+connection after each query
+- Update geocoder retry policy to try again with a smaller batch size
+
 ## 2023-02-14 -- v0.0.6
 ### Added
 - Replaced generic classes/functions with nypl-py-utils
