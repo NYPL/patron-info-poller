@@ -12,8 +12,11 @@ from helpers.query_helper import (build_deleted_patrons_query,
                                   build_redshift_patron_query,
                                   build_updated_patrons_query)
 from lib import GeocoderApiClient
-from nypl_py_utils import (AvroEncoder, KinesisClient, PostgreSQLClient,
-                           RedshiftClient, S3Client)
+from nypl_py_utils.classes.avro_encoder import AvroEncoder
+from nypl_py_utils.classes.kinesis_client import KinesisClient
+from nypl_py_utils.classes.postgresql_client import PostgreSQLClient
+from nypl_py_utils.classes.redshift_client import RedshiftClient
+from nypl_py_utils.classes.s3_client import S3Client
 from nypl_py_utils.functions.log_helper import create_log
 from nypl_py_utils.functions.obfuscation_helper import obfuscate
 
@@ -84,10 +87,6 @@ class PipelineController:
             raise PipelineControllerError(
                 'run_pipeline called with bad pipeline mode: {}'.format(mode))
 
-        self.sierra_client.connect()
-        if mode != PipelineMode.NEW_PATRONS:
-            self.redshift_client.connect()
-
         batch_number = 1
         finished = False
         while not finished:
@@ -123,12 +122,9 @@ class PipelineController:
 
         self.logger.info((
             'Finished processing {mode} patrons session with {batch} batches, '
-            'closing all connections').format(mode=mode, batch=batch_number-1))
+            'closing AWS connections').format(mode=mode, batch=batch_number-1))
         self.s3_client.close()
         self.kinesis_client.close()
-        self.sierra_client.close_connection()
-        if mode != PipelineMode.NEW_PATRONS:
-            self.redshift_client.close_connection()
 
     def _run_active_patrons_single_iteration(self, mode):
         """
@@ -140,7 +136,9 @@ class PipelineController:
             build_new_patrons_query(self.poller_state['creation_dt'])
             if mode == PipelineMode.NEW_PATRONS else
             build_updated_patrons_query(self.poller_state['update_dt']))
+        self.sierra_client.connect()
         sierra_raw_data = self.sierra_client.execute_query(query)
+        self.sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
             data=sierra_raw_data, columns=_SIERRA_COLUMNS_MAP[mode],
             dtype='string')
@@ -228,7 +226,9 @@ class PipelineController:
         """
         # Get data from Sierra
         query = build_deleted_patrons_query(self.poller_state['deletion_date'])
+        self.sierra_client.connect()
         sierra_raw_data = self.sierra_client.execute_query(query)
+        self.sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
             data=sierra_raw_data, dtype='string',
             columns=_SIERRA_COLUMNS_MAP[PipelineMode.DELETED_PATRONS])
@@ -287,8 +287,10 @@ class PipelineController:
         address_hashes_str = "','".join(
             all_patrons_df['address_hash'].to_string(index=False).split())
         address_hashes_str = "'" + address_hashes_str + "'"
+        self.redshift_client.connect()
         redshift_raw_data = self.redshift_client.execute_query(
             build_redshift_address_query(address_hashes_str))
+        self.redshift_client.close_connection()
         redshift_df = pd.DataFrame(
             data=redshift_raw_data, dtype='string',
             columns=['address_hash', 'patron_id', 'geoid'])
@@ -305,8 +307,10 @@ class PipelineController:
         patron_ids_str = "','".join(
             deleted_patrons_df['patron_id'].to_string(index=False).split())
         patron_ids_str = "'" + patron_ids_str + "'"
+        self.redshift_client.connect()
         redshift_raw_data = self.redshift_client.execute_query(
             build_redshift_patron_query(patron_ids_str))
+        self.redshift_client.close_connection()
         redshift_df = pd.DataFrame(
             data=redshift_raw_data, dtype='string', columns=_REDSHIFT_COLUMNS)
 

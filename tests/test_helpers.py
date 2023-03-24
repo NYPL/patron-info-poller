@@ -18,6 +18,7 @@ class TestHelpers:
         'GEOCODER_API_BASE_URL': 'https://test_geocoder_url',
         'GEOCODER_API_BENCHMARK': 'test_geocoder_benchmark',
         'GEOCODER_API_VINTAGE': 'test_geocoder_vintage',
+        'GEOCODER_API_KEY': 'test_geocoder_key',
         'PATRON_INFO_SCHEMA_URL': 'https://test_schema_url',
         'KINESIS_STREAM_ARN': 'test_kinesis_stream',
         'KINESIS_BATCH_SIZE': '2',

@@ -54,6 +54,7 @@ The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) 
 | `REDSHIFT_DB_HOST` | Encrypted Redshift cluster endpoint |
 | `REDSHIFT_DB_USER` | Encrypted Redshift user |
 | `REDSHIFT_DB_PASSWORD` | Encrypted Redshift password for the user |
+| `GEOCODER_API_KEY` | Encrypted key for using the Geocoder API -- at the moment a key is best practice but is not strictly necessary to use the API |
 | `KINESIS_STREAM_ARN` | Encrypted ARN for the Kinesis stream the poller sends the encoded data to |
 | `BCRYPT_SALT` | Encrypted bcrypt salt |
 | `GEOCODER_API_BASE_URL` | Always `https://geocoding.geo.census.gov/geocoder/geographies/addressbatch`. API endpoint to which the poller sends batch geocoding requests. |
