@@ -1,5 +1,6 @@
 import copy
 import datetime
+import numpy as np
 import os
 import pandas as pd
 import pytest
@@ -85,34 +86,17 @@ _REDSHIFT_PATRON_RESULTS = [
     ['obfuscated_patron_3', 'addr_hash_3', '33333', '33333333333',
      datetime.date(2021, 3, 3), datetime.date(2021, 6, 3), 3, 4, 'cc'],]
 
-_NEW_GEOCODER_INPUT_COLUMNS = [
-    'patron_id_plaintext', 'ptype_code', 'pcode3', 'patron_home_library_code',
-    'city', 'region', 'postal_code', 'address', 'circ_active_date_et',
-    'deletion_date_et', 'last_updated_date_et', 'creation_timestamp',
-    'address_hash_plaintext', 'address_hash', 'patron_id', 'geoid']
-
-_NEW_GEOCODER_INPUT = pd.DataFrame(
-    data=[['123', '4.0', '5.0', 'home_library1', 'city1', 'region1',
-           'postal_code1', 'address1', '2021-01-01', '2021-01-02',
-           '2021-01-03', '2020-12-31 23:59:59-05:00',
-           '123_address1_city1_region1_postal_code1', 'obfuscated_1', None,
-           None],
-          ['456', '5.0', '6.0', 'home_library2', 'city2', 'region2',
-           'postal_code2', 'address2', '2021-02-01', '2021-02-02',
-           '2021-02-03', '2020-12-30 23:59:59-05:00',
-           '456_address2_city2_region2_postal_code2', 'obfuscated_2', None,
-           None],
-          ['789', None, None, None, None, None, None, None, None, None, None,
-           '2020-12-28 23:59:59-05:00', '789____', 'obfuscated_3', None,
-           None]],
-    columns=_NEW_GEOCODER_INPUT_COLUMNS,
+_GEOCODER_INPUT = pd.DataFrame(
+    data=[['address1', 'city1', 'region1', 'postal_code1', '123'],
+          ['address2', 'city2', 'region2', 'postal_code2', '456'],
+          [None, None, None, None, '789']],
+    columns=['address', 'city', 'region',
+             'postal_code', 'patron_id_plaintext'],
     dtype='string')
 
-_UPDATED_GEOCODER_INPUT = _NEW_GEOCODER_INPUT.rename(
-    columns={'last_updated_date_et': 'creation_date_et',
-             'creation_timestamp': 'last_updated_timestamp'})
-
-_GEOIDS = pd.Series(['67890', None, '12345'], index=[1, 2, 0], name='geoid')
+_GEOID_OUTPUT = pd.DataFrame(
+    {'patron_id': ['obfuscated_5', 'obfuscated_6', 'obfuscated_4'],
+     'geoid': ['67890', None, '12345']}, index=[1, 2, 0])
 
 _NEW_AVRO_ENCODER_INPUT = [
     {'patron_id': 'obfuscated_4', 'address_hash': 'obfuscated_1',
@@ -150,7 +134,7 @@ _DELETED_AVRO_ENCODER_INPUT = [
     {'patron_id': 'obfuscated_patron_1', 'address_hash': 'addr_hash_1',
      'postal_code': '11111', 'geoid': '11111111111',
      'creation_date_et': '2021-01-01', 'deletion_date_et': '2022-01-01',
-     'circ_active_date_et': '2021-06-01',  'ptype_code': 1, 'pcode3': 2,
+     'circ_active_date_et': '2021-06-01', 'ptype_code': 1, 'pcode3': 2,
      'patron_home_library_code': 'aa'},
     {'patron_id': 'obfuscated_patron_2', 'address_hash': None,
      'postal_code': None, 'geoid': None, 'creation_date_et': None,
@@ -162,8 +146,85 @@ _DELETED_AVRO_ENCODER_INPUT = [
      'circ_active_date_et': '2021-06-03', 'ptype_code': 3, 'pcode3': 4,
      'patron_home_library_code': 'cc'}]
 
-_ENCODED_RECORDS = [b'encoded_1', b'encoded_2',  b'encoded_3', b'encoded_4',
+_ENCODED_RECORDS = [b'encoded_1', b'encoded_2', b'encoded_3', b'encoded_4',
                     b'encoded_5']
+
+_ORIGINAL_ADDRESS_DF = pd.DataFrame(
+    {'address': ['123 address', None, '456 address', '789 address',
+                 '012 address', '345 address', '678 address'],
+     'city': ['New York', None, 'Brooklyn', 'C"hicag\\o', 'LA', 'Tokyo',
+              'Bronx'],
+     'region': ['NY', None, 'NY', 'IL', 'CA', None, 'NY'],
+     'postal_code': ['11111', None, '22222', '33333-4444', '55555-6666', '',
+                     '77777'],
+     'patron_id_plaintext': ['patid1', 'patid2', 'patid3', 'patid4', 'patid5',
+                             'patid6', 'patid7']
+     }, index=[1, 0, 3, 2, 4, 10, 5])
+
+_CENSUS_INPUT_1 = pd.DataFrame(
+    {'address': ['123 address', '456 address', '789 address', '012 address',
+                 '345 address', '678 address'],
+     'city': ['New York', 'Brooklyn', 'Chicago', 'LA', 'Tokyo', 'Bronx'],
+     'region': ['NY', 'NY', 'IL', 'CA', '', 'NY'],
+     'postal_code': ['11111', '22222', '33333-4444', '55555-6666', '',
+                     '77777'],
+     'patron_id_plaintext': ['patid1', 'patid3', 'patid4', 'patid5',
+                             'patid6', 'patid7'],
+     'patron_id': ['obfuscated_1', 'obfuscated_3', 'obfuscated_4',
+                   'obfuscated_5', 'obfuscated_6', 'obfuscated_7'],
+     'full_address': ['123 address New York NY 11111',
+                      '456 address Brooklyn NY 22222',
+                      '789 address Chicago IL 33333-4444',
+                      '012 address LA CA 55555-6666',
+                      '345 address Tokyo',
+                      '678 address Bronx NY 77777']
+     }, index=[1, 3, 2, 4, 10, 5])
+
+_CENSUS_INPUT_2 = pd.DataFrame(
+    {'address': ['456 address', '012 address', '345 address', '678 address'],
+     'city': ['Brooklyn', 'LA', 'Tokyo', 'Bronx'],
+     'region': ['NY', 'CA', '', 'NY'],
+     'postal_code': ['22222', '55555-6666', '', '77777'],
+     'patron_id_plaintext': ['patid3', 'patid5', 'patid6', 'patid7'],
+     'patron_id': ['obfuscated_3', 'obfuscated_5', 'obfuscated_6',
+                   'obfuscated_7'],
+     'full_address': ['456 address Brooklyn NY 22222',
+                      '012 address LA CA 55555-6666',
+                      '345 address Tokyo',
+                      '678 address Bronx NY 77777'],
+     'house_number': ['456', '012', '345', '678'],
+     'street_name': ['address']*4
+     }, index=[3, 4, 10, 5])
+
+_NYC_INPUT = pd.DataFrame(
+    {'address': ['456 address', '678 address'],
+     'city': ['Brooklyn', 'Bronx'],
+     'region': ['NY', 'NY'],
+     'postal_code': ['22222', '77777'],
+     'patron_id_plaintext': ['patid3', 'patid7'],
+     'patron_id': ['obfuscated_3', 'obfuscated_7'],
+     'full_address': ['456 address Brooklyn NY 22222',
+                      '678 address Bronx NY 77777'],
+     'house_number': ['456', '678'],
+     'street_name': ['address', 'address']
+     }, index=[3, 5])
+
+_CENSUS_GEOID_1 = pd.Series(
+    ['00111222222', np.nan, '3344455555', np.nan, np.nan, np.nan],
+    name='geoid', index=[1, 4, 2, 3, 10, 5])
+
+_CENSUS_GEOID_2 = pd.Series(['66777888888', np.nan, np.nan, np.nan],
+                            name='geoid', index=[4, 3, 10, 5])
+
+_NYC_GEOID = pd.Series([np.nan, '99000111111'], name='geoid', index=[5, 3])
+
+_ALL_GEOIDS = pd.DataFrame({
+    'patron_id': ['obfuscated_1', 'obfuscated_2', 'obfuscated_3',
+                  'obfuscated_4', 'obfuscated_5', 'obfuscated_6',
+                  'obfuscated_7'],
+    'geoid': ['00111222222', np.nan, '99000111111', '3344455555',
+              '66777888888', np.nan, np.nan]},
+    index=[1, 0, 3, 2, 4, 10, 5])
 
 
 class TestMain:
@@ -184,7 +245,8 @@ class TestMain:
         mocker.patch('lib.pipeline_controller.S3Client')
         mocker.patch('lib.pipeline_controller.PostgreSQLClient')
         mocker.patch('lib.pipeline_controller.RedshiftClient')
-        mocker.patch('lib.pipeline_controller.GeocoderApiClient')
+        mocker.patch('lib.pipeline_controller.CensusGeocoderApiClient')
+        mocker.patch('lib.pipeline_controller.NycGeocoderClient')
         mocker.patch('lib.pipeline_controller.KinesisClient')
         mocker.patch('lib.pipeline_controller.AvroEncoder')
 
@@ -324,16 +386,6 @@ class TestMain:
         test_instance.sierra_client.close_connection.assert_called_once()
 
     def test_run_new_patrons_single_iteration(self, test_instance, mocker):
-        # This input check implicitly tests that the raw data is loaded into a
-        # dataframe properly and that duplicate patron ids have been removed.
-        # It must be done in a side_effect function because the real argument
-        # to the geocoder is updated, preventing usage of call_args. For more
-        # information, see:
-        # https://docs.python.org/dev/library/unittest.mock-examples.html#coping-with-mutable-arguments
-        def test_geocoder_input(input_df):
-            assert_frame_equal(input_df, _NEW_GEOCODER_INPUT)
-            return _GEOIDS
-
         test_instance.poller_state = {
             'creation_dt': _CREATION_DT.format(1),
             'update_dt': _UPDATE_DT.format(1),
@@ -342,10 +394,11 @@ class TestMain:
         test_instance.sierra_client.execute_query.return_value = \
             _NEW_SIERRA_RESULTS
 
-        test_instance.geocoder_client.get_geoids.side_effect = \
-            test_geocoder_input
         test_instance.avro_encoder.encode_batch.return_value = \
             _ENCODED_RECORDS[:3]
+        mocked_unknown_patrons_method = mocker.patch(
+            'lib.pipeline_controller.PipelineController._process_unknown_patrons',  # noqa: E501
+            return_value=_GEOID_OUTPUT)
         mocker.patch('lib.pipeline_controller.build_new_patrons_query',
                      return_value='NEW PATRONS QUERY')
         mocker.patch('lib.pipeline_controller.obfuscate', side_effect=[
@@ -360,6 +413,10 @@ class TestMain:
             'NEW PATRONS QUERY')
         test_instance.sierra_client.close_connection.assert_called_once()
 
+        mocked_unknown_patrons_method.assert_called_once()
+        assert_frame_equal(mocked_unknown_patrons_method.call_args.args[0],
+                           _GEOCODER_INPUT)
+
         # This input check implicitly tests that the geoids have been joined,
         # the datatypes have been converted, and the ids have been obfuscated
         test_instance.avro_encoder.encode_batch.assert_called_once()
@@ -370,18 +427,6 @@ class TestMain:
             _ENCODED_RECORDS[:3])
 
     def test_run_updated_patrons_single_iteration(self, test_instance, mocker):
-        # This input check implicitly tests that the raw data is loaded into a
-        # dataframe properly, that duplicate and previously processed patron
-        # ids have been removed, and that addresses contained in Redshift are
-        # not included. It must be done in a side_effect function because the
-        # real argument to the geocoder is updated, preventing usage of
-        # call_args. For more information, see:
-        # https://docs.python.org/dev/library/unittest.mock-examples.html#coping-with-mutable-arguments
-        def test_geocoder_input(input_df):
-            assert_frame_equal(
-                input_df, _UPDATED_GEOCODER_INPUT, check_like=True)
-            return _GEOIDS
-
         test_instance.processed_ids = {'777'}
         test_instance.poller_state = {
             'creation_dt': _CREATION_DT.format(1),
@@ -393,10 +438,11 @@ class TestMain:
         test_instance.redshift_client.execute_query.return_value = \
             _REDSHIFT_ADDRESS_RESULTS
 
-        test_instance.geocoder_client.get_geoids.side_effect = \
-            test_geocoder_input
         test_instance.avro_encoder.encode_batch.return_value = \
             _ENCODED_RECORDS
+        mocked_unknown_patrons_method = mocker.patch(
+            'lib.pipeline_controller.PipelineController._process_unknown_patrons',  # noqa: E501
+            return_value=_GEOID_OUTPUT)
         mocker.patch('lib.pipeline_controller.build_updated_patrons_query',
                      return_value='UPDATED PATRONS QUERY')
         mocker.patch('lib.pipeline_controller.build_redshift_address_query',
@@ -418,6 +464,10 @@ class TestMain:
         test_instance.redshift_client.execute_query.assert_called_once_with(
             'REDSHIFT ADDRESS QUERY')
         test_instance.redshift_client.close_connection.assert_called_once()
+
+        mocked_unknown_patrons_method.assert_called_once()
+        assert_frame_equal(mocked_unknown_patrons_method.call_args.args[0],
+                           _GEOCODER_INPUT)
 
         # This input check implicitly tests that the geoids have been joined,
         # the datatypes have been converted, and the ids have been obfuscated
@@ -470,3 +520,30 @@ class TestMain:
 
         test_instance.kinesis_client.send_records.assert_called_once_with(
             _ENCODED_RECORDS[:2])
+
+    def test_process_unknown_patrons(self, test_instance, mocker):
+        def mock_reformat_malformed_address(address_row):
+            address_row['house_number'] = address_row['address'][:3]
+            address_row['street_name'] = 'address'
+            return address_row
+
+        mocker.patch('lib.pipeline_controller.obfuscate', side_effect=[
+            'obfuscated_{}'.format(i) for i in range(1, 8)])
+        mocker.patch('lib.pipeline_controller.reformat_malformed_address',
+                     new=mock_reformat_malformed_address)
+
+        test_instance.census_geocoder_client.get_geoids.side_effect = [
+            _CENSUS_GEOID_1, _CENSUS_GEOID_2]
+        test_instance.nyc_geocoder_client.get_geoids.return_value = _NYC_GEOID
+
+        assert_frame_equal(test_instance._process_unknown_patrons(
+            _ORIGINAL_ADDRESS_DF), _ALL_GEOIDS, check_like=True)
+        assert_frame_equal(
+            test_instance.census_geocoder_client.get_geoids.call_args_list[0][0][0],  # noqa: E501
+            _CENSUS_INPUT_1, check_like=True)
+        assert_frame_equal(
+            test_instance.census_geocoder_client.get_geoids.call_args_list[1][0][0],  # noqa: E501
+            _CENSUS_INPUT_2, check_like=True)
+        assert_frame_equal(
+            test_instance.nyc_geocoder_client.get_geoids.call_args[0][0],
+            _NYC_INPUT, check_like=True)

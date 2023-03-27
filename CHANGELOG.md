@@ -1,3 +1,11 @@
+## 2023-03-27 -- v0.0.8
+### Added
+- Added NYC-specific geocoder to try and geocode any address that weren't found
+by the census geocoder
+### Fixed
+- Updated address_helper to use usaddress package to parse addresses rather
+than hardcoded regular expressions
+
 ## 2023-03-23 -- v0.0.7
 ### Fixed
 - Use nypl-py-utils v1.0.0

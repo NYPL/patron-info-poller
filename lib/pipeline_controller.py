@@ -6,12 +6,13 @@ import warnings
 
 from concurrent.futures import ProcessPoolExecutor
 from enum import Enum
+from helpers.address_helper import reformat_malformed_address
 from helpers.query_helper import (build_deleted_patrons_query,
                                   build_new_patrons_query,
                                   build_redshift_address_query,
                                   build_redshift_patron_query,
                                   build_updated_patrons_query)
-from lib import GeocoderApiClient
+from lib import CensusGeocoderApiClient, NycGeocoderClient
 from nypl_py_utils.classes.avro_encoder import AvroEncoder
 from nypl_py_utils.classes.kinesis_client import KinesisClient
 from nypl_py_utils.classes.postgresql_client import PostgreSQLClient
@@ -60,7 +61,8 @@ class PipelineController:
     def __init__(self):
         self.logger = create_log('pipeline_controller')
 
-        self.geocoder_client = GeocoderApiClient()
+        self.census_geocoder_client = CensusGeocoderApiClient()
+        self.nyc_geocoder_client = NycGeocoderClient()
         self.s3_client = S3Client(
             os.environ['S3_BUCKET'], os.environ['S3_RESOURCE'])
         self.avro_encoder = AvroEncoder(os.environ['PATRON_INFO_SCHEMA_URL'])
@@ -187,14 +189,17 @@ class PipelineController:
             processed_df[['patron_id', 'geoid']] = None
         processed_df = processed_df.astype('string')
 
-        # For every row not already in Redshift, geocode it and obfuscate the
-        # patron id, ignoring the FutureWarning caused by the pandas update
-        # method, which is not relevant to this code.
-        unknown_patrons_df = processed_df[pd.isnull(processed_df['patron_id'])]
-        unknown_patrons_df = self._process_unknown_patrons(unknown_patrons_df)
+        # For every row not already in Redshift, obfuscate the patron id and
+        # geocode it, ignoring the FutureWarning caused by the pandas update
+        # method, which is not relevant to this code
+        unknown_patrons_df = processed_df[
+            pd.isnull(processed_df['patron_id'])][
+            ['address', 'city', 'region', 'postal_code',
+             'patron_id_plaintext']]
+        geocoded_df = self._process_unknown_patrons(unknown_patrons_df)
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
-            processed_df.update(unknown_patrons_df)
+            processed_df.update(geocoded_df)
 
         # Modify the data to match what's expected by the PatronInfo Avro
         # schema
@@ -321,25 +326,67 @@ class PipelineController:
     def _process_unknown_patrons(self, unknown_patrons_df):
         """
         Takes a dataframe of patrons whose addresses have not already been
-        geocoded, sends them to the geocoder API and obfuscates their patron
-        ids
+        geocoded, obfuscates their patron ids, sends them to the census
+        geocoder API and then, if that's unsuccessful, to the NYC geocoder.
         """
-        # Get geoids from geocoder API and join with processed Sierra data,
+        # Obfuscate the patron ids using bcrypt
+        address_df = unknown_patrons_df.copy()
+        self.logger.info('Obfuscating ({}) patron ids'.format(
+            len(address_df)))
+        with ProcessPoolExecutor() as executor:
+            address_df['patron_id'] = list(executor.map(
+                obfuscate, address_df['patron_id_plaintext']))
+
+        # Get geoids from census geocoder API
+        address_df[['address', 'city', 'region', 'postal_code']] = address_df[
+            ['address', 'city', 'region', 'postal_code']].replace(
+            r'\'|"|\\', '', regex=True).fillna('')
+        address_df['full_address'] = (
+            address_df['address'] + ' ' + address_df['city'] + ' ' +
+            address_df['region'] + ' ' + address_df['postal_code']).str.strip()
+        input_df = address_df[address_df['full_address'].str.len() > 0]
+        if len(input_df) == 0:
+            address_df['geoid'] = None
+            return address_df[['patron_id', 'geoid']]
+        geoids = self.census_geocoder_client.get_geoids(input_df)
+
+        # For addresses that weren't geocoded, reformat them and try again,
         # ignoring the FutureWarning caused by the pandas update method, which
-        # is not relevant to this code.
-        unknown_patrons_df_copy = unknown_patrons_df.copy()
-        geoids = self.geocoder_client.get_geoids(unknown_patrons_df_copy)
+        # is not relevant to this code. Sending two requests is also
+        # recommended by the API because it sometimes erroneously fails to
+        # match an address when in batch mode. For more info, see:
+        # https://www2.census.gov/geo/pdfs/maps-data/data/Census_Geocoder_FAQ.pdf
+        retry_indices = geoids[geoids.isnull()].index
+        if len(retry_indices) == 0:
+            address_df['geoid'] = geoids
+            return address_df[['patron_id', 'geoid']]
+        input_df = input_df.loc[retry_indices]
+        input_df = input_df.apply(reformat_malformed_address, axis=1)
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
-            unknown_patrons_df_copy.update(geoids)
+            geoids.update(self.census_geocoder_client.get_geoids(input_df))
 
-        # Obfuscate the patron ids using bcrypt
-        self.logger.info('Obfuscating ({}) patron ids'.format(
-            len(unknown_patrons_df_copy)))
-        with ProcessPoolExecutor() as executor:
-            unknown_patrons_df_copy['patron_id'] = list(executor.map(
-                obfuscate, unknown_patrons_df_copy['patron_id_plaintext']))
-        return unknown_patrons_df_copy
+        # Send addresses that still aren't geocoded to the NYC geocoder,
+        # ignoring the FutureWarning caused by the pandas update method, which
+        # is not relevant to this code
+        retry_indices = geoids[geoids.isnull()].index
+        if len(input_df) == 0:
+            address_df['geoid'] = geoids
+            return address_df[['patron_id', 'geoid']]
+        input_df = input_df.loc[retry_indices]
+        input_df = input_df[
+            (input_df['house_number'].str.len() > 0) &
+            (input_df['street_name'].str.len() > 0) &
+            (input_df['postal_code'].str.len() > 0)]
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            geoids.update(self.nyc_geocoder_client.get_geoids(input_df))
+
+        self.logger.info(
+            'Successfully geocoded {success}/{total} non-empty addresses'
+            .format(success=len(geoids[geoids.notnull()]), total=len(geoids)))
+        address_df['geoid'] = geoids
+        return address_df[['patron_id', 'geoid']]
 
     def _get_poller_state(self, batch_number):
         """

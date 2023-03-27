@@ -1,20 +1,18 @@
 import os
 import pandas as pd
 import requests
-import warnings
 
-from helpers.address_helper import reformat_malformed_addresses
 from io import BytesIO, TextIOWrapper
 from nypl_py_utils.functions.log_helper import create_log
 from requests.adapters import HTTPAdapter, Retry
 from requests.exceptions import RequestException
 
 
-class GeocoderApiClient:
+class CensusGeocoderApiClient:
     """Client for managing requests to the Census Geocoder API"""
 
     def __init__(self):
-        self.logger = create_log('geocoder_api_client')
+        self.logger = create_log('census_geocoder_api_client')
 
         retry_policy = Retry(total=2, backoff_factor=4,
                              status_forcelist=[500, 502, 503, 504],
@@ -24,44 +22,15 @@ class GeocoderApiClient:
 
     def get_geoids(self, address_df):
         """
-        Geocodes the addresses in address_df by sending two (successful)
-        requests to the API: one with all of the input addresses and another
-        with the addresses that failed to be geocoded in the first request.
-        This is recommended by the API because it sometimes erroneously fails
-        to match an address when it's used in batch mode. For more info, see
-        https://www2.census.gov/geo/pdfs/maps-data/data/Census_Geocoder_FAQ.pdf
-
-        Returns a series containing the geoids (or NaN) indexed to match
-        address_df.
-        """
-        self.logger.info(
-            'Sending ({}) addresses to geocoder API'.format(len(address_df)))
-        input_address_df = address_df[
-            ['address', 'city', 'region', 'postal_code']].replace(
-                r'\'|"|\\', '', regex=True)
-        geoids = self._get_geoids_with_single_request(input_address_df)
-        retry_indices = geoids[geoids.isnull()].index
-        retry_address_df = input_address_df.loc[retry_indices]
-        retry_address_df = retry_address_df.apply(
-            reformat_malformed_addresses, axis=1)
-
-        # Ignore the FutureWarning caused by the pandas update method, which is
-        # not relevant to this code.
-        with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)
-            geoids.update(
-                self._get_geoids_with_single_request(retry_address_df))
-
-        return geoids
-
-    def _get_geoids_with_single_request(self, address_df):
-        """
         Sends the addresses in address_df to the geocoder a single time, which
         may require multiple requests if the geocoder is overloaded.
 
         Returns a series containing the geoids (or NaN) indexed to match
         address_df.
         """
+        self.logger.info(
+            'Sending ({}) addresses to census geocoder API'.format(
+                len(address_df)))
         raw_response = self._send_request(address_df)
         response_df = pd.read_csv(BytesIO(raw_response), header=None,
                                   dtype=str, index_col=0, engine='python',
@@ -116,7 +85,7 @@ class GeocoderApiClient:
                 self.logger.error(
                     ('Failed to retrieve geocoded addresses from API: {}')
                     .format(e))
-                raise GeocoderApiClientError(
+                raise CensusGeocoderApiClientError(
                     ('Failed to retrieve geocoded addresses from API: {}')
                     .format(e)) from None
 
@@ -137,6 +106,6 @@ class NamedTextIOWrapper(TextIOWrapper):
         return super().__getattribute__(name)
 
 
-class GeocoderApiClientError(Exception):
+class CensusGeocoderApiClientError(Exception):
     def __init__(self, message=None):
         self.message = message
