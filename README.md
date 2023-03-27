@@ -1,6 +1,6 @@
 # PatronInfoPoller
 
-The PatronInfoPoller periodically checks for patron data from Sierra, sends it to a geocoding API, obfuscates it, and writes the results to PatronInfo Kinesis streams for ingest into the [BIC](https://github.com/NYPL/BIC).
+The PatronInfoPoller periodically checks for patron data from Sierra, sends it to two separate geocoders, obfuscates it, and writes the results to PatronInfo Kinesis streams for ingest into the [BIC](https://github.com/NYPL/BIC).
 
 ## Running locally
 * `cd` into this directory

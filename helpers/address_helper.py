@@ -1,137 +1,97 @@
 import re
+import usaddress
 
 from nypl_py_utils.functions.log_helper import create_log
 
 logger = create_log('address_helper')
 
-_ENDS_WITH_POSTAL_CODE = re.compile(r'(^|\s)(\d{5}([\-]?\d{4})?)$')
-_ENDS_WITH_NY_BOROUGH = re.compile(
-    r'(^|\s)(BRONX|BROOKLYN|MANHATTAN|QUEENS|STATEN ISLAND)($|\s(NY|NYC|NEW YORK)$)')  # noqa: E501'
-_ENDS_WITH_NY_NY = re.compile(
-    r'(^|\s)(NY|NYC|NEW YORK)\s(NY|NYC|NEW YORK)$')
-_CONTAINS_NY_STATE = re.compile(r'(^|\s)(NY|NYC|NEW YORK)($|\s)')
+_STREET_KEYS = [
+    'StreetNamePreDirectional', 'StreetNamePreModifier', 'StreetNamePreType',
+    'StreetName', 'StreetNamePostType', 'StreetNamePostModifier',
+    'StreetNamePostDirectional']
+_SECONDARY_KEYS = [
+    'BuildingName', 'SubaddressType', 'OccupancyType', 'OccupancyIdentifier']
+_ADDRESS_TAG_MAP = dict.fromkeys(_STREET_KEYS, 'street')
+_ADDRESS_TAG_MAP.update(dict.fromkeys(_SECONDARY_KEYS, 'line2'))
 
 
-def reformat_malformed_addresses(address_row):
+def reformat_malformed_address(address_row):
     """
-    Looks for common errors in a Sierra address and corrects them:
-
-    1) If the postal_code field does not contain a correct postal code and one
-    of the other fields ends with a string resembling a postal code, use that
-    instead. Then remove anything resembling a postal code from the end of all
-    the other fields.
-    2) If the city field is empty and one of the other fields contains a
-    borough name, use that as the city and set the region to 'NY'
-    3) If the region field is still empty and one of the other fields contains
-    some variation of 'NY', use that instead. We do not check for other state
-    abbreviations because many are also common address abbreviations (e.g FL
-    for floor, LA for lane, etc.). Then remove any borough or variation of 'NY'
-    from the other fields as long as that doesn't result in an empty string.
-    4) Remove anything that's not a digit or '-' from the postal code
-    5) Remove anything that's not a letter, a space, or '- 'from the city and
-    region
-    6) Remove anything that's not a letter, a space, or '-', '#', '&', '.',
-    ',', ';', ':', '+', '@', '/' from the address
+    Parses the original address and uses the parsed version to set the city,
+    region, etc. that should be sent to the geocoders
     """
-    processed_address_row = address_row.fillna('').str.strip()
-    if (processed_address_row == '').all():
-        return processed_address_row
+    address_row['house_number'] = ''
+    try:
+        parsed_address, _ = usaddress.tag(
+            address_row['full_address'], tag_mapping=_ADDRESS_TAG_MAP)
+        address_row['city'] = parsed_address.get('PlaceName', '')
+        address_row['region'] = parsed_address.get('StateName', '')
+        address_row['postal_code'] = parsed_address.get('ZipCode', '')
+        address_row['house_number'] = parsed_address.get('AddressNumber', '')
+        address_row['street_name'] = parsed_address.get('street', '')
+        address_row['address'] = (
+            address_row['house_number'] + ' ' + address_row['street_name'] +
+            ' ' + parsed_address.get('line2', '')).strip()
+    except usaddress.RepeatedLabelError as e:
+        for df_field, label in [
+                ('city', 'PlaceName'), ('region', 'StateName'),
+                ('postal_code', 'ZipCode'), ('house_number', 'AddressNumber')]:
+            address_row[df_field] = _combine_repeated_labels(
+                e.parsed_string, label) or address_row[df_field]
 
-    processed_address_row = processed_address_row.str.upper()
-    processed_address_row['original_postal_code'] = processed_address_row[
-        'postal_code']
-    processed_address_row['original_city'] = processed_address_row['city']
+        address_row['street_name'] = _combine_multilabel_field(
+            e.parsed_string, _STREET_KEYS)
+        line2 = _combine_multilabel_field(e.parsed_string, _SECONDARY_KEYS)
+        address = (address_row['house_number'] + ' ' +
+                   address_row['street_name'] + ' ' + line2).strip()
+        if len(address) > 0:
+            address_row['address'] = address
 
-    # Step 1) in method description
-    postal_code_match = _ENDS_WITH_POSTAL_CODE.search(
-        processed_address_row['postal_code'])
-    if postal_code_match:
-        processed_address_row['postal_code'] = postal_code_match.group(
-            0).lstrip()
-    else:
-        for col_name in ['address', 'region', 'city']:
-            has_match = _ENDS_WITH_POSTAL_CODE.search(
-                processed_address_row[col_name])
-            if has_match:
-                processed_address_row['postal_code'] = has_match.group(
-                    0).lstrip()
-                break
-    for col_name in ['address', 'region', 'city']:
-        processed_address_row[col_name] = re.sub(
-            _ENDS_WITH_POSTAL_CODE, '', processed_address_row[col_name]
-        ).strip()
+    # Strip the city and region of anything that's not a letter, space, or -.
+    address_row['city'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ-\\s]', '',
+                                 address_row['city']).strip()
+    address_row['region'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ-\\s]', '',
+                                   address_row['region']).strip()
+    # Strip the street_name and address of anything that's not a letter, space,
+    # digit, or common punctuation.
+    address_row['street_name'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ0-9-\\s#&.,;:+@/]',
+                                        '', address_row['street_name']).strip()
+    address_row['address'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ0-9-\\s#&.,;:+@/]', '',
+                                    address_row['address']).strip()
+    # Strip the postal_code of anything that's not a digit or -.
+    address_row['postal_code'] = re.sub('[^\\d-]', '',
+                                        address_row['postal_code']).strip()
+    return address_row
 
-    # Step 2) in method description
-    borough_match = _ENDS_WITH_NY_BOROUGH.search(
-        processed_address_row['city'])
-    ny_ny_match = _ENDS_WITH_NY_NY.search(processed_address_row['city'])
-    if borough_match:
-        processed_address_row['city'] = re.sub(
-            _CONTAINS_NY_STATE, '', borough_match.group(0)).strip()
-        processed_address_row['region'] = 'NY'
-    elif ny_ny_match:
-        processed_address_row['city'] = 'NEW YORK'
-        processed_address_row['region'] = 'NY'
-    elif processed_address_row['city'] == '':
-        for col_name in ['address', 'region', 'original_postal_code']:
-            has_borough_match = _ENDS_WITH_NY_BOROUGH.search(
-                processed_address_row[col_name])
-            has_ny_ny_match = _ENDS_WITH_NY_NY.search(
-                processed_address_row[col_name])
-            if has_borough_match:
-                processed_address_row['city'] = re.sub(
-                    _CONTAINS_NY_STATE, '', has_borough_match.group(0)).strip()
-                processed_address_row['region'] = 'NY'
-                break
-            if has_ny_ny_match:
-                processed_address_row['city'] = 'NEW YORK'
-                processed_address_row['region'] = 'NY'
-                break
-    if processed_address_row['city'] == 'MANHATTAN':
-        processed_address_row['city'] = 'NEW YORK'
 
-    # Step 3) in method description
-    ny_state_match = _CONTAINS_NY_STATE.search(processed_address_row['region'])
-    if ny_state_match:
-        processed_address_row['region'] = 'NY'
-    elif processed_address_row['region'] == '':
-        for col_name in ['address', 'original_city', 'original_postal_code']:
-            has_match = _CONTAINS_NY_STATE.search(
-                processed_address_row[col_name])
-            if has_match:
-                processed_address_row['region'] = 'NY'
-                break
+def _combine_repeated_labels(parsed_string, label):
+    """
+    When the parsed address contains multiple portions with the same label,
+    concatenate them unless they are identical.
 
-    processed_address_row['address'] = re.sub(
-        _ENDS_WITH_NY_BOROUGH, '', processed_address_row['address']
-    ).strip()
-    processed_address_row['address'] = re.sub(
-        _ENDS_WITH_NY_NY, '', processed_address_row['address']
-    ).strip()
-    for col_name in ['address', 'region', 'city', 'postal_code']:
-        new_val = re.sub(
-            _CONTAINS_NY_STATE, '', processed_address_row[col_name]
-        ).strip()
-        if new_val != '':
-            processed_address_row[col_name] = new_val
+    Returns None if the output is empty
+    """
+    output_list = []
+    for addr_portion in parsed_string:
+        if (addr_portion[1] == label
+                and addr_portion[0] not in output_list):
+            output_list.append(addr_portion[0])
+    output = ' '.join(output_list).strip()
+    return output if len(output) > 0 else None
 
-    # Steps 4)-6) in method description
-    processed_address_row['postal_code'] = re.sub(
-        '[^\\d-]', '', processed_address_row['postal_code']).strip()
-    processed_address_row['city'] = re.sub(
-        '[^A-Za-zÀ-ÖØ-öø-ÿ-\\s]', '', processed_address_row['city']).strip()
-    processed_address_row['region'] = re.sub(
-        '[^A-Za-zÀ-ÖØ-öø-ÿ-\\s]', '', processed_address_row['region']).strip()
-    processed_address_row['address'] = re.sub(
-        '[^A-Za-zÀ-ÖØ-öø-ÿ0-9-\\s#&.,;:+@/]', '',
-        processed_address_row['address']).strip()
 
-    results_row = processed_address_row[[
-        'address', 'city', 'region', 'postal_code']]
-    input_row = address_row.fillna('').str.upper()
-    if not input_row.equals(results_row):
-        logger.debug((
-            'Changed geocoder address input from:\n{input} to:\n{output}')
-            .format(input=input_row, output=results_row))
+def _combine_multilabel_field(parsed_string, labels):
+    """
+    For repeated labels that all map to the same field (e.g. the multiple
+    portions of the street_name), combine them all separately using
+    _combine_repeated_labels() and then concatenate them.
 
-    return processed_address_row[['address', 'city', 'region', 'postal_code']]
+    Returns an empty string if the output is empty
+    """
+    output_list = []
+    for label in labels:
+        parsed_label = _combine_repeated_labels(
+            parsed_string, label)
+        if parsed_label is not None and parsed_label not in output_list:
+            output_list.append(parsed_label)
+    return ' '.join(output_list).strip()

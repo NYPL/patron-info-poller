@@ -4,5 +4,7 @@ nypl-py-utils[avro-encoder,kinesis-client,postgresql-client,redshift-client,s3-c
 pandas
 pytest
 pytest-mock
+python-geosupport
 requests
 requests-mock
+usaddress
