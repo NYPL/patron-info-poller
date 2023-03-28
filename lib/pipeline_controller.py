@@ -221,7 +221,7 @@ class PipelineController:
              'ptype_code', 'pcode3', 'patron_home_library_code']]
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        #self.kinesis_client.send_records(encoded_records)
+        self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
 
@@ -279,7 +279,7 @@ class PipelineController:
              'ptype_code', 'pcode3', 'patron_home_library_code']]
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        #self.kinesis_client.send_records(encoded_records)
+        self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
 
