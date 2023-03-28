@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import warnings
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from helpers.address_helper import reformat_malformed_address
 from helpers.query_helper import (build_deleted_patrons_query,
@@ -177,7 +177,7 @@ class PipelineController:
             processed_df['city'].fillna('') + '_' +
             processed_df['region'].fillna('') + '_' +
             processed_df['postal_code'].fillna(''))
-        with ProcessPoolExecutor() as executor:
+        with ThreadPoolExecutor() as executor:
             processed_df['address_hash'] = list(executor.map(
                 obfuscate, processed_df['address_hash_plaintext']))
 
@@ -221,7 +221,7 @@ class PipelineController:
              'ptype_code', 'pcode3', 'patron_home_library_code']]
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        self.kinesis_client.send_records(encoded_records)
+        #self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
 
@@ -257,7 +257,7 @@ class PipelineController:
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(processed_df)))
-        with ProcessPoolExecutor() as executor:
+        with ThreadPoolExecutor() as executor:
             processed_df['patron_id'] = list(executor.map(
                 obfuscate, processed_df['patron_id_plaintext']))
 
@@ -279,7 +279,7 @@ class PipelineController:
              'ptype_code', 'pcode3', 'patron_home_library_code']]
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        self.kinesis_client.send_records(encoded_records)
+        #self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
 
@@ -333,7 +333,7 @@ class PipelineController:
         address_df = unknown_patrons_df.copy()
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(address_df)))
-        with ProcessPoolExecutor() as executor:
+        with ThreadPoolExecutor() as executor:
             address_df['patron_id'] = list(executor.map(
                 obfuscate, address_df['patron_id_plaintext']))
 
