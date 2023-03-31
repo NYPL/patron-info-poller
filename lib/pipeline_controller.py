@@ -370,7 +370,7 @@ class PipelineController:
         # ignoring the FutureWarning caused by the pandas update method, which
         # is not relevant to this code
         retry_indices = geoids[geoids.isnull()].index
-        if len(input_df) == 0:
+        if len(retry_indices) == 0:
             address_df['geoid'] = geoids
             return address_df[['patron_id', 'geoid']]
         input_df = input_df.loc[retry_indices]
@@ -378,6 +378,9 @@ class PipelineController:
             (input_df['house_number'].str.len() > 0) &
             (input_df['street_name'].str.len() > 0) &
             (input_df['postal_code'].str.len() > 0)]
+        if len(input_df) == 0:
+            address_df['geoid'] = geoids
+            return address_df[['patron_id', 'geoid']]
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
             geoids.update(self.nyc_geocoder_client.get_geoids(input_df))
