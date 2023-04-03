@@ -177,7 +177,7 @@ class PipelineController:
             processed_df['city'].fillna('') + '_' +
             processed_df['region'].fillna('') + '_' +
             processed_df['postal_code'].fillna(''))
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             processed_df['address_hash'] = list(executor.map(
                 obfuscate, processed_df['address_hash_plaintext']))
 
@@ -257,7 +257,7 @@ class PipelineController:
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(processed_df)))
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             processed_df['patron_id'] = list(executor.map(
                 obfuscate, processed_df['patron_id_plaintext']))
 
@@ -333,7 +333,7 @@ class PipelineController:
         address_df = unknown_patrons_df.copy()
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(address_df)))
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             address_df['patron_id'] = list(executor.map(
                 obfuscate, address_df['patron_id_plaintext']))
 
