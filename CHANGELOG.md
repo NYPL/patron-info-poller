@@ -1,4 +1,10 @@
-## 2023-03-27 -- v0.0.8
+## 2023-04-03 -- v1.0.3
+### Fixed
+- Handle case when all addresses have been geocoded by the census geocoder
+- Translate all addresses to ascii before sending to NYC geocoder to avoid
+errors
+
+## 2023-03-27 -- v1.0.0
 ### Added
 - Added NYC-specific geocoder to try and geocode any address that weren't found
 by the census geocoder
