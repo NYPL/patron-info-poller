@@ -7,4 +7,5 @@ pytest-mock
 python-geosupport
 requests
 requests-mock
+unidecode
 usaddress

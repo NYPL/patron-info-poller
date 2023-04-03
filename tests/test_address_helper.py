@@ -59,15 +59,15 @@ class TestAddressHelper:
 
     def test_character_replacement(self, mocker):
         input_row = pd.Series({
-            'address': '123 $R%E{A[L∆ AVE',
+            'address': '123 $R%E{A[L∆ ÁVE',
             'city': 'N1E2W3 Y.O,R#K',
             'region': '1N&Y.',
             'postal_code': 'abc11111-2.2,2+2d',
-            'full_address': ('123 $R%E{A[L∆ AVE N1E2W3 Y.O,R#K 1N&Y. '
+            'full_address': ('123 $R%E{A[L∆ ÁVE N1E2W3 Y.O,R#K 1N&Y. '
                              'abc11111-2.2,2+2d')})
         mocker.patch('usaddress.tag', return_value=(OrderedDict([
             ('AddressNumber', '123'),
-            ('street', '$R%E{A[L∆ AVE'),
+            ('street', '$R%E{A[L∆ ÁVE'),
             ('PlaceName', 'N1E2W3 Y.O,R#K'),
             ('StateName', '1N&Y.'),
             ('ZipCode', 'abc11111-2.2,2+2d')]),
@@ -77,7 +77,7 @@ class TestAddressHelper:
             'city': 'NEW YORK',
             'region': 'NY',
             'postal_code': '11111-2222',
-            'full_address': ('123 $R%E{A[L∆ AVE N1E2W3 Y.O,R#K 1N&Y. '
+            'full_address': ('123 $R%E{A[L∆ ÁVE N1E2W3 Y.O,R#K 1N&Y. '
                              'abc11111-2.2,2+2d'),
             'house_number': '123',
             'street_name': 'REAL AVE'})

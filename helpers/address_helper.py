@@ -2,6 +2,8 @@ import re
 import usaddress
 
 from nypl_py_utils.functions.log_helper import create_log
+from unidecode import unidecode
+
 
 logger = create_log('address_helper')
 
@@ -49,18 +51,21 @@ def reformat_malformed_address(address_row):
 
     # Strip the city and region of anything that's not a letter, space, or -.
     address_row['city'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ-\\s]', '',
-                                 address_row['city']).strip()
+                                 unidecode(address_row['city'])).strip()
     address_row['region'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ-\\s]', '',
-                                   address_row['region']).strip()
+                                   unidecode(address_row['region'])).strip()
     # Strip the street_name and address of anything that's not a letter, space,
     # digit, or common punctuation.
-    address_row['street_name'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ0-9-\\s#&.,;:+@/]',
-                                        '', address_row['street_name']).strip()
+    address_row['street_name'] = re.sub(
+        '[^A-Za-zÀ-ÖØ-öø-ÿ0-9-\\s#&.,;:+@/]', '',
+        unidecode(address_row['street_name'])).strip()
     address_row['address'] = re.sub('[^A-Za-zÀ-ÖØ-öø-ÿ0-9-\\s#&.,;:+@/]', '',
-                                    address_row['address']).strip()
+                                    unidecode(address_row['address'])).strip()
     # Strip the postal_code of anything that's not a digit or -.
-    address_row['postal_code'] = re.sub('[^\\d-]', '',
-                                        address_row['postal_code']).strip()
+    address_row['postal_code'] = re.sub(
+        '[^\\d-]', '', unidecode(address_row['postal_code'])).strip()
+    # Translate the house_number to ascii
+    address_row['house_number'] = unidecode(address_row['house_number'])
     return address_row
 
 
