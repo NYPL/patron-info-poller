@@ -28,7 +28,7 @@ class NycGeocoderClient:
         """
         self.logger.info(
             'Sending ({}) addresses to NYC geocoder'.format(len(address_df)))
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             geoids_list = list(executor.map(
                 self._geocode_address, address_df.iterrows()))
 
