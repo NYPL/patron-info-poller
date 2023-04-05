@@ -3,18 +3,15 @@
 The PatronInfoPoller periodically checks for patron data from Sierra, sends it to two separate geocoders, obfuscates it, and writes the results to PatronInfo Kinesis streams for ingest into the [BIC](https://github.com/NYPL/BIC).
 
 ## Running locally
-* `cd` into this directory
-* Add your AWS credentials (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`) to the config file for the environment you want to run
-  * Alternatively, you can manually export them (e.g. `export AWS_ACCESS_KEY_ID=<key>`)
-* Run `ENVIRONMENT=<env> python3 main.py`
-  * `<env>` should be the config filename without the `.yaml` suffix
-  * `make run` will run the poller using the development environment
-* Alternatively, to build and run a Docker container, run:
+* Because the NYC geocoder requires the dockerized version of the Geosupport application, the poller must be run via Docker
+* To build and run the poller, run the following, where `<env>` is the config filename without the `.yaml` suffix:
 ```
 docker image build -t patron-info-poller:local .
 
 docker container run -e ENVIRONMENT=<env> -e AWS_ACCESS_KEY_ID=<aws_key> -e AWS_SECRET_ACCESS_KEY=<aws_secret_key> patron-info-poller:local
 ```
+* If you add your AWS credentials directly to the `devel.yaml` config file, you can also use `make run` to build and run the poller in the development environment
+* Note that running the poller with `production.yaml` will actually send records to the production Kinesis stream -- it is not meant to be used for development purposes 
 
 ## Git workflow
 This repo uses the [Main-QA-Production](https://github.com/NYPL/engineering-general/blob/main/standards/git-workflow.md#main-qa-production) git workflow.
@@ -35,6 +32,7 @@ This repo uses the [Main-QA-Production](https://github.com/NYPL/engineering-gene
 ## Deployment
 The poller is deployed as an AWS ECS service to [qa](https://us-east-1.console.aws.amazon.com/ecs/home?region=us-east-1#/clusters/patron-info-poller-qa/services) and [prod](https://us-east-1.console.aws.amazon.com/ecs/home?region=us-east-1#/clusters/patron-info-poller-production/services) environments. To upload a new QA version of this service, create a new release in GitHub off of the `qa` branch and tag it `qa-vX.X.X`. The GitHub Actions deploy-qa workflow will then deploy the code to ECR and update the ECS service appropriately. To deploy to production, create the release from the `production` branch and tag it `production-vX.X.X`. To trigger the app to run immediately (rather than waiting for the next scheduled event), run:
 ```bash
+# In production, use patron-info-poller-production:5 for the task definition
 aws ecs run-task --cluster patron-info-poller-qa --task-definition  patron-info-poller-qa:4 --count 1 --region us-east-1 --profile nypl-digital-dev
 ```
 

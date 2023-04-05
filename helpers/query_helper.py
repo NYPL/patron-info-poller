@@ -14,6 +14,7 @@ _NEW_PATRONS_QUERY = '''
         FROM sierra_view.record_metadata
         WHERE record_type_code = 'p'
             AND creation_date_gmt >= '{cached_creation_dt}'
+            AND creation_date_gmt IS NOT NULL
         ORDER BY creation_date_gmt
         LIMIT {limit}) x
     LEFT JOIN sierra_view.patron_record_address
@@ -37,6 +38,7 @@ _UPDATED_PATRONS_QUERY = '''
         FROM sierra_view.record_metadata
         WHERE record_type_code = 'p'
             AND record_last_updated_gmt >= '{cached_update_dt}'
+            AND record_last_updated_gmt IS NOT NULL
         ORDER BY record_last_updated_gmt
         LIMIT {limit}) x
     LEFT JOIN sierra_view.patron_record_address
@@ -52,6 +54,7 @@ _DELETED_PATRONS_QUERY = '''
     FROM sierra_view.record_metadata
     WHERE record_type_code = 'p'
         AND deletion_date_gmt >= '{cached_deletion_date}'
+        AND deletion_date_gmt IS NOT NULL
     ORDER BY deletion_date_gmt
     LIMIT {limit};'''
 
