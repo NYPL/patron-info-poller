@@ -1,3 +1,7 @@
+## 2023-04-05 -- v1.0.4
+- Use nypl-py-utils v1.0.1
+- Ignore NULL dates when querying Sierra 
+
 ## 2023-04-03 -- v1.0.3
 ### Fixed
 - Handle case when all addresses have been geocoded by the census geocoder
