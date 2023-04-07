@@ -11,8 +11,8 @@ help:
 	@echo "    lint project files using the flake8 linter"
 
 run:
-	export ENVIRONMENT=devel; \
-	python3 main.py
+	docker image build -t patron-info-poller:local .; \
+	docker container run -e ENVIRONMENT=devel patron-info-poller:local
 
 test:
 	pytest

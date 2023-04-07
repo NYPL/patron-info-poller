@@ -196,10 +196,11 @@ class PipelineController:
             pd.isnull(processed_df['patron_id'])][
             ['address', 'city', 'region', 'postal_code',
              'patron_id_plaintext']]
-        geocoded_df = self._process_unknown_patrons(unknown_patrons_df)
-        with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)
-            processed_df.update(geocoded_df)
+        if len(unknown_patrons_df) > 0:
+            geocoded_df = self._process_unknown_patrons(unknown_patrons_df)
+            with warnings.catch_warnings():
+                warnings.simplefilter(action='ignore', category=FutureWarning)
+                processed_df.update(geocoded_df)
 
         # Modify the data to match what's expected by the PatronInfo Avro
         # schema
