@@ -1,3 +1,6 @@
+## 2023-04-14 -- v1.0.5
+- Update Sierra production host
+
 ## 2023-04-05 -- v1.0.4
 - Use nypl-py-utils v1.0.1
 - Ignore NULL dates when querying Sierra 
