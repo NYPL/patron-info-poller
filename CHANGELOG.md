@@ -1,3 +1,7 @@
+## 2023-05-08 -- v1.0.6
+- Don't query Sierra for records that changed after the initial polling
+datetime
+
 ## 2023-04-14 -- v1.0.5
 - Update Sierra production host
 
