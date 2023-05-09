@@ -14,6 +14,7 @@ _NEW_PATRONS_QUERY = '''
         FROM sierra_view.record_metadata
         WHERE record_type_code = 'p'
             AND creation_date_gmt >= '{cached_creation_dt}'
+            AND creation_date_gmt < '{now}'
             AND creation_date_gmt IS NOT NULL
         ORDER BY creation_date_gmt
         LIMIT {limit}) x
@@ -38,6 +39,7 @@ _UPDATED_PATRONS_QUERY = '''
         FROM sierra_view.record_metadata
         WHERE record_type_code = 'p'
             AND record_last_updated_gmt >= '{cached_update_dt}'
+            AND record_last_updated_gmt < '{now}'
             AND record_last_updated_gmt IS NOT NULL
         ORDER BY record_last_updated_gmt
         LIMIT {limit}) x
@@ -54,6 +56,7 @@ _DELETED_PATRONS_QUERY = '''
     FROM sierra_view.record_metadata
     WHERE record_type_code = 'p'
         AND deletion_date_gmt >= '{cached_deletion_date}'
+        AND deletion_date_gmt < '{now}'
         AND deletion_date_gmt IS NOT NULL
     ORDER BY deletion_date_gmt
     LIMIT {limit};'''
@@ -72,24 +75,27 @@ _REDSHIFT_PATRON_QUERY = '''
 '''
 
 
-def build_new_patrons_query(creation_dt_start):
+def build_new_patrons_query(creation_dt_start, now):
     return _NEW_PATRONS_QUERY.format(
         cached_creation_dt=creation_dt_start,
         limit=os.environ['SIERRA_BATCH_SIZE'],
-        total_limit=int(os.environ['SIERRA_BATCH_SIZE']) * 2)
+        total_limit=int(os.environ['SIERRA_BATCH_SIZE']) * 2,
+        now=now)
 
 
-def build_updated_patrons_query(update_dt_start):
+def build_updated_patrons_query(update_dt_start, now):
     return _UPDATED_PATRONS_QUERY.format(
         cached_update_dt=update_dt_start,
         limit=os.environ['SIERRA_BATCH_SIZE'],
-        total_limit=int(os.environ['SIERRA_BATCH_SIZE']) * 2)
+        total_limit=int(os.environ['SIERRA_BATCH_SIZE']) * 2,
+        now=now)
 
 
-def build_deleted_patrons_query(deletion_date_start):
+def build_deleted_patrons_query(deletion_date_start, now):
     return _DELETED_PATRONS_QUERY.format(
         cached_deletion_date=deletion_date_start,
-        limit=os.environ['SIERRA_BATCH_SIZE'])
+        limit=os.environ['SIERRA_BATCH_SIZE'],
+        now=now)
 
 
 def build_redshift_address_query(address_hashes):

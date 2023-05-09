@@ -1,5 +1,7 @@
 import os
+import pytz
 
+from datetime import datetime
 from lib.pipeline_controller import PipelineController, PipelineMode
 from nypl_py_utils.functions.config_helper import load_env_file
 from nypl_py_utils.functions.log_helper import create_log
@@ -7,8 +9,9 @@ from nypl_py_utils.functions.log_helper import create_log
 
 def main():
     load_env_file(os.environ['ENVIRONMENT'], 'config/{}.yaml')
+    now = str(datetime.now(pytz.utc))
     logger = create_log(__name__)
-    controller = PipelineController()
+    controller = PipelineController(now)
 
     logger.info('Starting new patrons pipeline run')
     controller.run_pipeline(PipelineMode.NEW_PATRONS)

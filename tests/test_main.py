@@ -2,10 +2,12 @@ import os
 import pytest
 import main
 
+from freezegun import freeze_time
 from lib.pipeline_controller import PipelineMode
 from tests.test_helpers import TestHelpers
 
 
+@freeze_time('2023-01-01 01:23:45+00:00')
 class TestMain:
 
     @classmethod
@@ -25,9 +27,11 @@ class TestMain:
         os.environ['BACKFILL'] = 'False'
 
         mock_pipeline_controller = mocker.MagicMock()
-        mocker.patch('main.PipelineController',
-                     return_value=mock_pipeline_controller)
+        mock_controller_initializer = mocker.patch(
+            'main.PipelineController', return_value=mock_pipeline_controller)
         main.main()
+        mock_controller_initializer.assert_called_once_with(
+            '2023-01-01 01:23:45+00:00')
         mock_pipeline_controller.run_pipeline.assert_has_calls([
             mocker.call(PipelineMode.NEW_PATRONS),
             mocker.call(PipelineMode.UPDATED_PATRONS),

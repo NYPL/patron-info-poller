@@ -58,8 +58,9 @@ class PipelineController:
     checking for recently deleted patrons
     """
 
-    def __init__(self):
+    def __init__(self, now):
         self.logger = create_log('pipeline_controller')
+        self.now = now
 
         self.census_geocoder_client = CensusGeocoderApiClient()
         self.nyc_geocoder_client = NycGeocoderClient()
@@ -135,9 +136,10 @@ class PipelineController:
         """
         # Get data from Sierra
         query = (
-            build_new_patrons_query(self.poller_state['creation_dt'])
+            build_new_patrons_query(self.poller_state['creation_dt'], self.now)
             if mode == PipelineMode.NEW_PATRONS else
-            build_updated_patrons_query(self.poller_state['update_dt']))
+            build_updated_patrons_query(
+                self.poller_state['update_dt'], self.now))
         self.sierra_client.connect()
         sierra_raw_data = self.sierra_client.execute_query(query)
         self.sierra_client.close_connection()
@@ -222,7 +224,8 @@ class PipelineController:
              'ptype_code', 'pcode3', 'patron_home_library_code']]
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        self.kinesis_client.send_records(encoded_records)
+        if os.environ.get('IGNORE_KINESIS', False) != 'True':
+            self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
 
@@ -231,7 +234,8 @@ class PipelineController:
         Runs the full pipeline a single time for recently deleted patrons
         """
         # Get data from Sierra
-        query = build_deleted_patrons_query(self.poller_state['deletion_date'])
+        query = build_deleted_patrons_query(self.poller_state['deletion_date'],
+                                            self.now)
         self.sierra_client.connect()
         sierra_raw_data = self.sierra_client.execute_query(query)
         self.sierra_client.close_connection()
@@ -280,7 +284,8 @@ class PipelineController:
              'ptype_code', 'pcode3', 'patron_home_library_code']]
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        self.kinesis_client.send_records(encoded_records)
+        if os.environ.get('IGNORE_KINESIS', False) != 'True':
+            self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
 

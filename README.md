@@ -37,7 +37,7 @@ aws ecs run-task --cluster patron-info-poller-qa --task-definition  patron-info-
 ```
 
 ## Environment variables
-The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) plus all of the encrypted variables in each environment file are required by the poller to run. There are then seven additional optional variables that can be used for development purposes -- `devel.yaml` sets each of these. Note that the `qa_env` and `production_env` files are actually read by the deployed service, so do not change these files unless you want to change how the service will behave in the wild -- these are not meant for local testing.
+The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) plus all of the encrypted variables in each environment file are required by the poller to run. There are then eight additional optional variables that can be used for development purposes -- `devel.yaml` sets each of these. Note that the `qa_env` and `production_env` files are actually read by the deployed service, so do not change these files unless you want to change how the service will behave in the wild -- these are not meant for local testing.
 
 | Name        | Notes           |
 | ------------- | ------------- |
@@ -66,6 +66,7 @@ The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) 
 | `LOG_LEVEL` (optional) | What level of logs should be output. Set to `info` by default. |
 | `MAX_BATCHES` (optional) | The maximum number of times the poller should poll Sierra per session. If this is not set, the poller will continue querying until all new records in Sierra have been processed. |
 | `IGNORE_CACHE` (optional) | Whether fetching and setting the state from S3 should not be done. If this is true, the `STARTING_CREATION_DT`, `STARTING_UPDATE_DT`, and `STARTING_DELETION_DATE` environment variables will be used for the initial state (or `2020-01-01 00:00:00-05` by default). |
+| `IGNORE_KINESIS` (optional) | Whether sending records to Kinesis should not be done |
 | `BACKFILL` (optional) | Whether only the new patrons routine should be run. When `MAX_BATCHES` is not set and `STARTING_CREATION_DT` is, this is used to backfill data. |
 | `STARTING_CREATION_DT` (optional) | If `IGNORE_CACHE` is true, the datetime to use in the `WHERE` clause of the newly created patrons Sierra query. If `IGNORE_CACHE` is false, this field is not read. |
 | `STARTING_UPDATE_DT` (optional) | If `IGNORE_CACHE` is true, the datetime to use in the `WHERE` clause of the newly updated patrons Sierra query. If `IGNORE_CACHE` is false, this field is not read. |

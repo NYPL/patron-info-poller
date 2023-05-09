@@ -246,7 +246,7 @@ class TestMain:
         mocker.patch('lib.pipeline_controller.NycGeocoderClient')
         mocker.patch('lib.pipeline_controller.KinesisClient')
         mocker.patch('lib.pipeline_controller.AvroEncoder')
-        return PipelineController()
+        return PipelineController('2023-01-01 12:34:56+00:00')
 
     def test_run_new_patrons_pipeline(self, test_instance, mocker):
         os.environ['MAX_BATCHES'] = '3'
