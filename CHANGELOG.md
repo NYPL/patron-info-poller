@@ -1,3 +1,9 @@
+## 2023-07-03 -- v1.0.7
+- Update `configure-aws-credentials` GitHub action version
+- Update `nypl-py-utils` version
+- Explicitly use ISO 8601 format for dates and times
+- Do not use automatically read in all data as strings
+
 ## 2023-05-08 -- v1.0.6
 - Don't query Sierra for records that changed after the initial polling
 datetime

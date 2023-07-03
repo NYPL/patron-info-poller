@@ -52,28 +52,27 @@ _BASE_LAST_SIERRA_ROW = pd.Series(
     {'patron_id_plaintext': None, 'ptype_code': None, 'pcode3': None,
      'patron_home_library_code': None, 'city': None, 'region': None,
      'postal_code': None, 'address': None, 'circ_active_date_et': None,
-     'deletion_date_et': None},
-    dtype='string')
+     'deletion_date_et': None})
 
 _LAST_NEW_SIERRA_ROW = pd.concat([
     _BASE_LAST_SIERRA_ROW,
-    pd.Series({'last_updated_date_et': None,
-               'creation_timestamp': '2020-12-28 23:59:59-05:00'},
-              dtype='string')])\
-    .rename(3)
+    pd.Series({
+        'last_updated_date_et': None,
+        'creation_timestamp': datetime.datetime(
+            2020, 12, 28, 23, 59, 59, tzinfo=_EST_TIMEZONE)})]).rename(3)
 _LAST_NEW_SIERRA_ROW.loc['patron_id_plaintext'] = '789'
 
 _LAST_UPDATED_SIERRA_ROW = pd.concat([
     _BASE_LAST_SIERRA_ROW,
-    pd.Series({'creation_date_et': None,
-               'last_updated_timestamp': '2022-07-07 07:07:07-05:00'},
-              dtype='string')])\
-    .rename(6)
+    pd.Series({
+        'creation_date_et': None,
+        'last_updated_timestamp': datetime.datetime(
+            2022, 7, 7, 7, 7, 7, tzinfo=_EST_TIMEZONE)})]).rename(6)
 _LAST_UPDATED_SIERRA_ROW.loc['patron_id_plaintext'] = '777'
 
 _LAST_DELETED_SIERRA_ROW = pd.Series(
-    {'patron_id_plaintext': '333', 'deletion_date_et': '2022-03-03'},
-    dtype='string',
+    {'patron_id_plaintext': '333',
+     'deletion_date_et': datetime.date(2022, 3, 3)},
     name=2)
 
 _REDSHIFT_ADDRESS_RESULTS = [

@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import pandas as pd
@@ -31,7 +30,6 @@ class PipelineMode(Enum):
         return self.name.lower().rstrip('_patrons')
 
 
-_EST_TIMEZONE = datetime.timezone(datetime.timedelta(days=-1, seconds=68400))
 _REDSHIFT_COLUMNS = [
     'patron_id', 'address_hash', 'postal_code', 'geoid', 'creation_date_et',
     'circ_active_date_et', 'ptype_code', 'pcode3', 'patron_home_library_code']
@@ -48,6 +46,17 @@ _SIERRA_COLUMNS_MAP = {
          'creation_date_et', 'last_updated_timestamp'],
     PipelineMode.DELETED_PATRONS:
         ['patron_id_plaintext', 'deletion_date_et']}
+_DTYPE_MAP = {
+    'patron_id': 'string',
+    'address_hash': 'string',
+    'postal_code': 'string',
+    'geoid': 'string',
+    'creation_date_et': 'string',
+    'deletion_date_et': 'string',
+    'circ_active_date_et': 'string',
+    'ptype_code': 'Int64',
+    'pcode3': 'Int64',
+    'patron_home_library_code': 'string'}
 
 
 class PipelineController:
@@ -144,8 +153,9 @@ class PipelineController:
         sierra_raw_data = self.sierra_client.execute_query(query)
         self.sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
-            data=sierra_raw_data, columns=_SIERRA_COLUMNS_MAP[mode],
-            dtype='string')
+            data=sierra_raw_data, columns=_SIERRA_COLUMNS_MAP[mode])
+        unprocessed_sierra_df['patron_id_plaintext'] = unprocessed_sierra_df[
+            'patron_id_plaintext'].astype('Int64').astype('string')
 
         # Remove records for any patron ids that have already been processed
         unseen_records_mask = ~unprocessed_sierra_df[
@@ -173,13 +183,16 @@ class PipelineController:
         # Obfuscate the patron addresses using bcrypt
         self.logger.info('Concatenating and obfuscating ({}) addresses'.format(
             len(processed_df)))
+        processed_df[
+            ['address', 'city', 'region', 'postal_code']] = processed_df[
+                ['address', 'city', 'region', 'postal_code']].astype('string')
         processed_df['address_hash_plaintext'] = (
             processed_df['patron_id_plaintext'] + '_' +
             processed_df['address'].fillna('') + '_' +
             processed_df['city'].fillna('') + '_' +
             processed_df['region'].fillna('') + '_' +
-            processed_df['postal_code'].fillna(''))
-        with ThreadPoolExecutor(max_workers=2) as executor:
+            processed_df['postal_code'].fillna('')).astype('string')
+        with ThreadPoolExecutor() as executor:
             processed_df['address_hash'] = list(executor.map(
                 obfuscate, processed_df['address_hash_plaintext']))
 
@@ -189,7 +202,8 @@ class PipelineController:
             processed_df = self._find_known_addreses(processed_df)
         else:
             processed_df[['patron_id', 'geoid']] = None
-        processed_df = processed_df.astype('string')
+            processed_df[['patron_id', 'geoid']] = processed_df[
+                ['patron_id', 'geoid']].astype('string')
 
         # For every row not already in Redshift, obfuscate the patron id and
         # geocode it, ignoring the FutureWarning caused by the pandas update
@@ -205,23 +219,19 @@ class PipelineController:
                 processed_df.update(geocoded_df)
 
         # Modify the data to match what's expected by the PatronInfo Avro
-        # schema
-        processed_df = processed_df.astype('string')
-        processed_df[['ptype_code', 'pcode3']] = processed_df[
-            ['ptype_code', 'pcode3']].apply(
-                pd.to_numeric, errors='coerce').astype('Int64')
-        processed_df['postal_code'] = processed_df['postal_code'].str.slice(
-            stop=5)
+        # schema, encode it, and send it to Kinesis
         if (mode == PipelineMode.NEW_PATRONS):
             processed_df['creation_date_et'] = processed_df[
-                'creation_timestamp'].apply(self._convert_dt_to_est_date)\
-                .astype('string')
+                'creation_timestamp'].dt.tz_convert('EST').dt.date
+        processed_df['postal_code'] = processed_df['postal_code'].str.slice(
+            stop=5)
 
-        # Encode the resulting data and send it to Kinesis
         results_df = processed_df[
             ['patron_id', 'address_hash', 'postal_code', 'geoid',
              'creation_date_et', 'deletion_date_et', 'circ_active_date_et',
              'ptype_code', 'pcode3', 'patron_home_library_code']]
+        results_df = results_df.astype(_DTYPE_MAP)
+
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
         if os.environ.get('IGNORE_KINESIS', False) != 'True':
@@ -240,8 +250,10 @@ class PipelineController:
         sierra_raw_data = self.sierra_client.execute_query(query)
         self.sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
-            data=sierra_raw_data, dtype='string',
+            data=sierra_raw_data,
             columns=_SIERRA_COLUMNS_MAP[PipelineMode.DELETED_PATRONS])
+        unprocessed_sierra_df['patron_id_plaintext'] = unprocessed_sierra_df[
+            'patron_id_plaintext'].astype('Int64').astype('string')
 
         # Remove records for any patron ids that have already been processed
         unseen_records_mask = ~unprocessed_sierra_df[
@@ -262,7 +274,7 @@ class PipelineController:
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(processed_df)))
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor() as executor:
             processed_df['patron_id'] = list(executor.map(
                 obfuscate, processed_df['patron_id_plaintext']))
 
@@ -271,17 +283,13 @@ class PipelineController:
         processed_df = self._find_deleted_patrons(processed_df)
 
         # Modify the data to match what's expected by the PatronInfo Avro
-        # schema
-        processed_df = processed_df.astype('string')
-        processed_df[['ptype_code', 'pcode3']] = processed_df[
-            ['ptype_code', 'pcode3']].apply(
-                pd.to_numeric, errors='coerce').astype('Int64')
-
-        # Encode the resulting data and send it to Kinesis
+        # schema, encode it, and send it to Kinesis
         results_df = processed_df[
             ['patron_id', 'address_hash', 'postal_code', 'geoid',
              'creation_date_et', 'deletion_date_et', 'circ_active_date_et',
              'ptype_code', 'pcode3', 'patron_home_library_code']]
+        results_df = results_df.astype(_DTYPE_MAP)
+
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
         if os.environ.get('IGNORE_KINESIS', False) != 'True':
@@ -323,7 +331,7 @@ class PipelineController:
             build_redshift_patron_query(patron_ids_str))
         self.redshift_client.close_connection()
         redshift_df = pd.DataFrame(
-            data=redshift_raw_data, dtype='string', columns=_REDSHIFT_COLUMNS)
+            data=redshift_raw_data, columns=_REDSHIFT_COLUMNS)
 
         full_patrons_df = deleted_patrons_df.merge(redshift_df, how='left',
                                                    on='patron_id')
@@ -339,7 +347,7 @@ class PipelineController:
         address_df = unknown_patrons_df.copy()
         self.logger.info('Obfuscating ({}) patron ids'.format(
             len(address_df)))
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor() as executor:
             address_df['patron_id'] = list(executor.map(
                 obfuscate, address_df['patron_id_plaintext']))
 
@@ -420,27 +428,15 @@ class PipelineController:
         """
         if (mode == PipelineMode.NEW_PATRONS):
             self.poller_state['creation_dt'] = last_processed_data[
-                'creation_timestamp']
+                'creation_timestamp'].isoformat()
         elif (mode == PipelineMode.UPDATED_PATRONS):
             self.poller_state['update_dt'] = last_processed_data[
-                'last_updated_timestamp']
+                'last_updated_timestamp'].isoformat()
         elif (mode == PipelineMode.DELETED_PATRONS):
             self.poller_state['deletion_date'] = last_processed_data[
-                'deletion_date_et']
-
+                'deletion_date_et'].isoformat()
         if os.environ.get('IGNORE_CACHE', False) != 'True':
             self.s3_client.set_cache(self.poller_state)
-
-    def _convert_dt_to_est_date(self, string_input):
-        """
-        Converts a string datetime with a timezone to the corresponding EST
-        date. In order to match what postgresql does when "AT TIME ZONE 'EST'"
-        is used, we always use EST, even when the date implies the timezone
-        should be EDT.
-        """
-        dt_input = datetime.datetime.strptime(
-            string_input, '%Y-%m-%d %H:%M:%S%z')
-        return dt_input.astimezone(_EST_TIMEZONE).strftime('%Y-%m-%d')
 
 
 class PipelineControllerError(Exception):
