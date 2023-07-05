@@ -1,7 +1,7 @@
 flake8
 freezegun
 numpy
-nypl-py-utils[avro-encoder,kinesis-client,postgresql-client,redshift-client,s3-client,config-helper,obfuscation-helper]==1.0.1
+nypl-py-utils[avro-encoder,kinesis-client,postgresql-client,redshift-client,s3-client,config-helper,obfuscation-helper]==1.0.4
 pandas
 pytest
 pytest-mock

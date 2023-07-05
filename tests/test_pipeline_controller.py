@@ -10,9 +10,9 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 from tests.test_helpers import TestHelpers
 
 
-_CREATION_DT = '2021-01-{} 01:01:01-05'
-_UPDATE_DT = '2021-02-{} 02:02:02-05'
-_DELETION_DATE = '2021-03-{}'
+_CREATION_DT = '2021-01-0{}T01:01:01-05:00'
+_UPDATE_DT = '2021-02-0{}T02:02:02-05:00'
+_DELETION_DATE = '2021-03-0{}'
 _EST_TIMEZONE = datetime.timezone(datetime.timedelta(days=-1, seconds=68400))
 
 _NEW_SIERRA_RESULTS = [
@@ -52,28 +52,27 @@ _BASE_LAST_SIERRA_ROW = pd.Series(
     {'patron_id_plaintext': None, 'ptype_code': None, 'pcode3': None,
      'patron_home_library_code': None, 'city': None, 'region': None,
      'postal_code': None, 'address': None, 'circ_active_date_et': None,
-     'deletion_date_et': None},
-    dtype='string')
+     'deletion_date_et': None})
 
 _LAST_NEW_SIERRA_ROW = pd.concat([
     _BASE_LAST_SIERRA_ROW,
-    pd.Series({'last_updated_date_et': None,
-               'creation_timestamp': '2020-12-28 23:59:59-05:00'},
-              dtype='string')])\
-    .rename(3)
+    pd.Series({
+        'last_updated_date_et': None,
+        'creation_timestamp': datetime.datetime(
+            2020, 12, 28, 23, 59, 59, tzinfo=_EST_TIMEZONE)})]).rename(3)
 _LAST_NEW_SIERRA_ROW.loc['patron_id_plaintext'] = '789'
 
 _LAST_UPDATED_SIERRA_ROW = pd.concat([
     _BASE_LAST_SIERRA_ROW,
-    pd.Series({'creation_date_et': None,
-               'last_updated_timestamp': '2022-07-07 07:07:07-05:00'},
-              dtype='string')])\
-    .rename(6)
+    pd.Series({
+        'creation_date_et': None,
+        'last_updated_timestamp': datetime.datetime(
+            2022, 7, 7, 7, 7, 7, tzinfo=_EST_TIMEZONE)})]).rename(6)
 _LAST_UPDATED_SIERRA_ROW.loc['patron_id_plaintext'] = '777'
 
 _LAST_DELETED_SIERRA_ROW = pd.Series(
-    {'patron_id_plaintext': '333', 'deletion_date_et': '2022-03-03'},
-    dtype='string',
+    {'patron_id_plaintext': '333',
+     'deletion_date_et': datetime.date(2022, 3, 3)},
     name=2)
 
 _REDSHIFT_ADDRESS_RESULTS = [
@@ -254,8 +253,9 @@ class TestMain:
 
         mocker.patch(
             'lib.pipeline_controller.PipelineController._run_active_patrons_single_iteration',  # noqa: E501
-            side_effect=[pd.Series(
-                {'creation_timestamp': _CREATION_DT.format(i)}, name=2)
+            side_effect=[pd.Series({
+                'creation_timestamp':
+                    pd.Timestamp(_CREATION_DT.format(i), tz='EST')}, name=2)
                 for i in range(2, 5)])
 
         test_instance.s3_client.fetch_cache.side_effect = [
@@ -283,12 +283,15 @@ class TestMain:
         mocker.patch(
             'lib.pipeline_controller.PipelineController._run_active_patrons_single_iteration',  # noqa: E501
             side_effect=[
-                pd.Series(
-                    {'last_updated_timestamp': _UPDATE_DT.format(2)}, name=2),
-                pd.Series(
-                    {'last_updated_timestamp': _UPDATE_DT.format(3)}, name=2),
-                pd.Series(
-                    {'last_updated_timestamp': _UPDATE_DT.format(4)}, name=1)])
+                pd.Series({'last_updated_timestamp':
+                           pd.Timestamp(_UPDATE_DT.format(2), tz='EST')},
+                          name=2),
+                pd.Series({'last_updated_timestamp':
+                           pd.Timestamp(_UPDATE_DT.format(3), tz='EST')},
+                          name=2),
+                pd.Series({'last_updated_timestamp':
+                           pd.Timestamp(_UPDATE_DT.format(4), tz='EST')},
+                          name=1)])
 
         test_instance.s3_client.fetch_cache.side_effect = [
             {'creation_dt': _CREATION_DT.format(1),
@@ -317,12 +320,18 @@ class TestMain:
         mocker.patch(
             'lib.pipeline_controller.PipelineController._run_deleted_patrons_single_iteration',  # noqa: E501
             side_effect=[
-                pd.Series(
-                    {'deletion_date_et': _DELETION_DATE.format(2)}, name=2),
-                pd.Series(
-                    {'deletion_date_et': _DELETION_DATE.format(3)}, name=2),
-                pd.Series(
-                    {'deletion_date_et': _DELETION_DATE.format(4)}, name=1)])
+                pd.Series({'deletion_date_et':
+                           datetime.datetime.strptime(_DELETION_DATE.format(2),
+                                                      '%Y-%m-%d').date()},
+                          name=2),
+                pd.Series({'deletion_date_et':
+                           datetime.datetime.strptime(_DELETION_DATE.format(3),
+                                                      '%Y-%m-%d').date()},
+                          name=2),
+                pd.Series({'deletion_date_et':
+                           datetime.datetime.strptime(_DELETION_DATE.format(4),
+                                                      '%Y-%m-%d').date()},
+                          name=1)])
 
         test_instance.s3_client.fetch_cache.side_effect = [
             {'creation_dt': _CREATION_DT.format(1),
