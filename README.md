@@ -37,7 +37,7 @@ aws ecs run-task --cluster patron-info-poller-qa --task-definition  patron-info-
 ```
 
 ## Environment variables
-The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) plus all of the encrypted variables in each environment file are required by the poller to run. There are then seven additional optional variables that can be used for development purposes -- `devel.yaml` sets each of these. Note that the `qa_env` and `production_env` files are actually read by the deployed service, so do not change these files unless you want to change how the service will behave in the wild -- these are not meant for local testing.
+The first 14 unencrypted variables (every variable through `DELETED_PATRON_BATCH_SIZE`) plus all of the encrypted variables in each environment file are required by the poller to run. There are then seven additional optional variables that can be used for development purposes -- `devel.yaml` sets each of these. Note that the `qa_env` and `production_env` files are actually read by the deployed service, so do not change these files unless you want to change how the service will behave in the wild -- these are not meant for local testing.
 
 | Name        | Notes           |
 | ------------- | ------------- |
@@ -62,7 +62,8 @@ The first 13 unencrypted variables (every variable through `SIERRA_BATCH_SIZE`) 
 | `KINESIS_BATCH_SIZE` | How many records should be sent to Kinesis at once. Kinesis supports up to 500 records per batch. |
 | `S3_BUCKET` | S3 bucket for the cache. This differs between QA and prod and should be empty when not using the cache locally. |
 | `S3_RESOURCE` | Name of the resource for the S3 cache. This differs between QA and prod and should be empty when not using the cache locally. |
-| `SIERRA_BATCH_SIZE` | How many patron ids should be queried from Sierra at once |
+| `ACTIVE_PATRON_BATCH_SIZE` | How many newly created or updated patron ids should be queried from Sierra at once |
+| `DELETED_PATRON_BATCH_SIZE` | How many newly deleted patron ids should be queried from Sierra at once |
 | `LOG_LEVEL` (optional) | What level of logs should be output. Set to `info` by default. |
 | `MAX_BATCHES` (optional) | The maximum number of times the poller should poll Sierra per session. If this is not set, the poller will continue querying until all new records in Sierra have been processed. |
 | `IGNORE_CACHE` (optional) | Whether fetching and setting the state from S3 should not be done. If this is true, the `STARTING_CREATION_DT`, `STARTING_UPDATE_DT`, and `STARTING_DELETION_DATE` environment variables will be used for the initial state (or `2020-01-01 00:00:00-05` by default). |

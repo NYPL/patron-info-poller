@@ -1,3 +1,7 @@
+## 2023-07-11 -- v1.0.8
+- Split up `SIERRA_BATCH_SIZE` into `ACTIVE_PATRON_BATCH_SIZE` and `DELETED_PATRON_BATCH_SIZE`
+- Throw an error if the poller is not moving forward in time
+
 ## 2023-07-03 -- v1.0.7
 - Update `configure-aws-credentials` GitHub action version
 - Update `nypl-py-utils` version
