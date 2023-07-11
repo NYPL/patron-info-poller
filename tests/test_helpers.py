@@ -24,7 +24,8 @@ class TestHelpers:
         'KINESIS_BATCH_SIZE': '2',
         'S3_BUCKET': 'test_s3_bucket',
         'S3_RESOURCE': 'test_s3_resource',
-        'SIERRA_BATCH_SIZE': '3'
+        'ACTIVE_PATRON_BATCH_SIZE': '4',
+        'DELETED_PATRON_BATCH_SIZE': '3'
     }
 
     @classmethod

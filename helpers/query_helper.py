@@ -78,23 +78,23 @@ _REDSHIFT_PATRON_QUERY = '''
 def build_new_patrons_query(creation_dt_start, now):
     return _NEW_PATRONS_QUERY.format(
         cached_creation_dt=creation_dt_start,
-        limit=os.environ['SIERRA_BATCH_SIZE'],
-        total_limit=int(os.environ['SIERRA_BATCH_SIZE']) * 2,
+        limit=os.environ['ACTIVE_PATRON_BATCH_SIZE'],
+        total_limit=int(os.environ['ACTIVE_PATRON_BATCH_SIZE']) * 2,
         now=now)
 
 
 def build_updated_patrons_query(update_dt_start, now):
     return _UPDATED_PATRONS_QUERY.format(
         cached_update_dt=update_dt_start,
-        limit=os.environ['SIERRA_BATCH_SIZE'],
-        total_limit=int(os.environ['SIERRA_BATCH_SIZE']) * 2,
+        limit=os.environ['ACTIVE_PATRON_BATCH_SIZE'],
+        total_limit=int(os.environ['ACTIVE_PATRON_BATCH_SIZE']) * 2,
         now=now)
 
 
 def build_deleted_patrons_query(deletion_date_start, now):
     return _DELETED_PATRONS_QUERY.format(
         cached_deletion_date=deletion_date_start,
-        limit=os.environ['SIERRA_BATCH_SIZE'],
+        limit=os.environ['DELETED_PATRON_BATCH_SIZE'],
         now=now)
 
 
