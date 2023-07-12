@@ -121,8 +121,12 @@ class PipelineController:
             # Cache the new state in S3 if necessary and check for more records
             if last_record is not None:
                 self._set_poller_state(mode, last_record)
-                no_more_records = (last_record.name + 1) < int(
-                    os.environ['SIERRA_BATCH_SIZE'])
+                if mode == PipelineMode.DELETED_PATRONS:
+                    no_more_records = (last_record.name + 1) < int(
+                        os.environ['DELETED_PATRON_BATCH_SIZE'])
+                else:
+                    no_more_records = (last_record.name + 1) < int(
+                        os.environ['ACTIVE_PATRON_BATCH_SIZE'])
             else:
                 no_more_records = True
 
@@ -156,6 +160,20 @@ class PipelineController:
             data=sierra_raw_data, columns=_SIERRA_COLUMNS_MAP[mode])
         unprocessed_sierra_df['patron_id_plaintext'] = unprocessed_sierra_df[
             'patron_id_plaintext'].astype('Int64').astype('string')
+
+        # Check that the number of records with the same timestamp does not
+        # exceed the batch size, which would cause the poller to stall.
+        if len(unprocessed_sierra_df) == int(
+            os.environ['ACTIVE_PATRON_BATCH_SIZE']) and (
+            (mode == PipelineMode.NEW_PATRONS and
+                min(unprocessed_sierra_df['creation_timestamp']) ==
+                max(unprocessed_sierra_df['creation_timestamp'])) or
+            (mode == PipelineMode.UPDATED_PATRONS and
+                min(unprocessed_sierra_df['last_updated_timestamp']) ==
+                max(unprocessed_sierra_df['last_updated_timestamp']))):
+            self.logger.error('Too many records found with the same timestamp')
+            raise PipelineControllerError(
+                'Too many records found with the same timestamp')
 
         # Remove records for any patron ids that have already been processed
         unseen_records_mask = ~unprocessed_sierra_df[
@@ -254,6 +272,16 @@ class PipelineController:
             columns=_SIERRA_COLUMNS_MAP[PipelineMode.DELETED_PATRONS])
         unprocessed_sierra_df['patron_id_plaintext'] = unprocessed_sierra_df[
             'patron_id_plaintext'].astype('Int64').astype('string')
+
+        # Check that the number of records with the same date does not exceed
+        # the batch size, which would cause the poller to stall.
+        if len(unprocessed_sierra_df) == int(
+                os.environ['DELETED_PATRON_BATCH_SIZE']) and (
+            min(unprocessed_sierra_df['deletion_date_et']) ==
+                max(unprocessed_sierra_df['deletion_date_et'])):
+            self.logger.error('Too many records found with the same date')
+            raise PipelineControllerError(
+                'Too many records found with the same date')
 
         # Remove records for any patron ids that have already been processed
         unseen_records_mask = ~unprocessed_sierra_df[

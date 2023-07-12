@@ -5,7 +5,8 @@ import os
 import pandas as pd
 import pytest
 
-from lib.pipeline_controller import PipelineController, PipelineMode
+from lib.pipeline_controller import (
+    PipelineController, PipelineControllerError, PipelineMode)
 from pandas.testing import assert_frame_equal, assert_series_equal
 from tests.test_helpers import TestHelpers
 
@@ -255,7 +256,7 @@ class TestMain:
             'lib.pipeline_controller.PipelineController._run_active_patrons_single_iteration',  # noqa: E501
             side_effect=[pd.Series({
                 'creation_timestamp':
-                    pd.Timestamp(_CREATION_DT.format(i), tz='EST')}, name=2)
+                    pd.Timestamp(_CREATION_DT.format(i), tz='EST')}, name=3)
                 for i in range(2, 5)])
 
         test_instance.s3_client.fetch_cache.side_effect = [
@@ -285,10 +286,10 @@ class TestMain:
             side_effect=[
                 pd.Series({'last_updated_timestamp':
                            pd.Timestamp(_UPDATE_DT.format(2), tz='EST')},
-                          name=2),
+                          name=3),
                 pd.Series({'last_updated_timestamp':
                            pd.Timestamp(_UPDATE_DT.format(3), tz='EST')},
-                          name=2),
+                          name=3),
                 pd.Series({'last_updated_timestamp':
                            pd.Timestamp(_UPDATE_DT.format(4), tz='EST')},
                           name=1)])
@@ -521,6 +522,55 @@ class TestMain:
 
         test_instance.kinesis_client.send_records.assert_called_once_with(
             _ENCODED_RECORDS[:2])
+
+    def test_run_active_pipeline_same_timestamp_records(
+            self, test_instance, mocker):
+        SAME_TIME_RESULTS = copy.deepcopy(_NEW_SIERRA_RESULTS)
+        for record in SAME_TIME_RESULTS:
+            record[-1] = datetime.datetime(2021, 1, 1, 00, 00, 00)
+
+        test_instance.poller_state = {
+            'creation_dt': _CREATION_DT.format(1),
+            'update_dt': _UPDATE_DT.format(1),
+            'deletion_date': _DELETION_DATE.format(1)}
+
+        test_instance.sierra_client.execute_query.return_value = \
+            SAME_TIME_RESULTS
+        mocker.patch('lib.pipeline_controller.build_new_patrons_query',
+                     return_value='NEW PATRONS QUERY')
+
+        with pytest.raises(PipelineControllerError):
+            test_instance._run_active_patrons_single_iteration(
+                PipelineMode.NEW_PATRONS)
+
+        test_instance.sierra_client.connect.assert_called_once()
+        test_instance.sierra_client.execute_query.assert_called_once_with(
+            'NEW PATRONS QUERY')
+        test_instance.sierra_client.close_connection.assert_called_once()
+
+    def test_run_deleted_pipeline_same_timestamp_records(
+            self, test_instance, mocker):
+        SAME_DATE_RESULTS = copy.deepcopy(_DELETED_SIERRA_RESULTS)
+        for record in SAME_DATE_RESULTS:
+            record[-1] = datetime.date(2021, 1, 1)
+
+        test_instance.poller_state = {
+            'creation_dt': _CREATION_DT.format(1),
+            'update_dt': _UPDATE_DT.format(1),
+            'deletion_date': _DELETION_DATE.format(1)}
+
+        test_instance.sierra_client.execute_query.return_value = \
+            SAME_DATE_RESULTS
+        mocker.patch('lib.pipeline_controller.build_deleted_patrons_query',
+                     return_value='DELETED PATRONS QUERY')
+
+        with pytest.raises(PipelineControllerError):
+            test_instance._run_deleted_patrons_single_iteration()
+
+        test_instance.sierra_client.connect.assert_called_once()
+        test_instance.sierra_client.execute_query.assert_called_once_with(
+            'DELETED PATRONS QUERY')
+        test_instance.sierra_client.close_connection.assert_called_once()
 
     def test_process_unknown_patrons(self, test_instance, mocker):
         def mock_reformat_malformed_address(address_row):

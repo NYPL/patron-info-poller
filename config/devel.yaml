@@ -12,7 +12,8 @@ PLAINTEXT_VARIABLES:
     KINESIS_BATCH_SIZE: 20
     S3_BUCKET: bic-poller-states-qa
     S3_RESOURCE: patron_info_poller_state.json
-    SIERRA_BATCH_SIZE: 20
+    ACTIVE_PATRON_BATCH_SIZE: 20
+    DELETED_PATRON_BATCH_SIZE: 20
     LOG_LEVEL: info
     MAX_BATCHES: 3
     IGNORE_CACHE: True
