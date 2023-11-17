@@ -1,4 +1,4 @@
-## 2023-07-11 -- v1.1.0
+## 2023-11-17 -- v1.1.0
 - Store NULL instead of the string "none" for a patron's home_library_code
 
 ## 2023-07-11 -- v1.0.8
