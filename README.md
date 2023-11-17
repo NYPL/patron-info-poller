@@ -11,7 +11,7 @@ docker image build -t patron-info-poller:local .
 docker container run -e ENVIRONMENT=<env> -e AWS_ACCESS_KEY_ID=<aws_key> -e AWS_SECRET_ACCESS_KEY=<aws_secret_key> patron-info-poller:local
 ```
 * If you add your AWS credentials directly to the `devel.yaml` config file, you can also use `make run` to build and run the poller in the development environment
-* Note that running the poller with `production.yaml` will actually send records to the production Kinesis stream -- it is not meant to be used for development purposes 
+* Note that running the poller with `production.yaml` will actually send records to the production Kinesis stream -- it is not meant to be used for development purposes
 
 ## Git workflow
 This repo uses the [Main-QA-Production](https://github.com/NYPL/engineering-general/blob/main/standards/git-workflow.md#main-qa-production) git workflow.

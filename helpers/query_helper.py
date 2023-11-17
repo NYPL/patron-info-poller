@@ -2,7 +2,9 @@ import os
 
 _NEW_PATRONS_QUERY = '''
     SELECT
-        x.id, ptype_code, pcode3, home_library_code,
+        x.id, ptype_code, pcode3,
+        CASE WHEN TRIM(home_library_code) = 'none' THEN NULL
+            ELSE TRIM(home_library_code) END,
         TRIM(city), TRIM(region), TRIM(postal_code), TRIM(addr1),
         (activity_gmt AT TIME ZONE 'EST')::DATE,
         deletion_date_gmt,
@@ -27,7 +29,9 @@ _NEW_PATRONS_QUERY = '''
 
 _UPDATED_PATRONS_QUERY = '''
     SELECT
-        x.id, ptype_code, pcode3, home_library_code,
+        x.id, ptype_code, pcode3,
+        CASE WHEN TRIM(home_library_code) = 'none' THEN NULL
+            ELSE TRIM(home_library_code) END,
         TRIM(city), TRIM(region), TRIM(postal_code), TRIM(addr1),
         (activity_gmt AT TIME ZONE 'EST')::DATE,
         deletion_date_gmt,
