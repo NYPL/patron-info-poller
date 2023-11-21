@@ -1,3 +1,6 @@
+## 2023-11-17 -- v1.1.0
+- Store NULL instead of the string "none" for a patron's home_library_code
+
 ## 2023-07-11 -- v1.0.8
 - Split up `SIERRA_BATCH_SIZE` into `ACTIVE_PATRON_BATCH_SIZE` and `DELETED_PATRON_BATCH_SIZE`
 - Throw an error if the poller is not moving forward in time
