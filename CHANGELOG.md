@@ -1,3 +1,6 @@
+## 2023-12-22 -- v1.1.1
+- Increase deleted patron batch size to account for end of year mass deletions by ILS
+
 ## 2023-11-17 -- v1.1.0
 - Store NULL instead of the string "none" for a patron's home_library_code
 
