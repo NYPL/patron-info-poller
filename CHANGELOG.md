@@ -1,3 +1,9 @@
+## 2024-06-14 -- v2.0.0
+- Query for (if necessary) and store patron's initial home library code
+- Use ET instead of EST when calculating all dates
+- Use the same Sierra query for new/updated patrons
+- Store NULL instead of empty string for a patron's home_library_code
+
 ## 2023-12-22 -- v1.1.1
 - Increase deleted patron batch size to account for end of year mass deletions by ILS
 

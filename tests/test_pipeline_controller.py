@@ -1,75 +1,84 @@
 import copy
 import datetime
+import logging
 import numpy as np
 import os
 import pandas as pd
 import pytest
 
-from lib.pipeline_controller import (
-    PipelineController, PipelineControllerError, PipelineMode)
+from helpers.pipeline_mode import PipelineMode
+from lib.pipeline_controller import PipelineController, PipelineControllerError
 from pandas.testing import assert_frame_equal, assert_series_equal
 from tests.test_helpers import TestHelpers
+from zoneinfo import ZoneInfo
 
 
 _CREATION_DT = '2021-01-0{}T01:01:01-05:00'
 _UPDATE_DT = '2021-02-0{}T02:02:02-05:00'
 _DELETION_DATE = '2021-03-0{}'
-_EST_TIMEZONE = datetime.timezone(datetime.timedelta(days=-1, seconds=68400))
 
-_NEW_SIERRA_RESULTS = [
+_ACTIVE_SIERRA_RESULTS = [
     [123, 4, 5, 'home_library1', 'city1', 'region1', 'postal_code1',
      'address1', datetime.date(2021, 1, 1), datetime.date(2021, 1, 2),
-     datetime.date(2021, 1, 3), datetime.datetime(2020, 12, 31, 23, 59, 59,
-                                                  tzinfo=_EST_TIMEZONE)],
+     datetime.datetime(2021, 1, 3, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York')),
+     datetime.datetime(2020, 12, 31, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York'))],
     [456, 5, 6, 'home_library2', 'city2', 'region2', 'postal_code2',
      'address2', datetime.date(2021, 2, 1), datetime.date(2021, 2, 2),
-     datetime.date(2021, 2, 3), datetime.datetime(2020, 12, 30, 23, 59, 59,
-                                                  tzinfo=_EST_TIMEZONE)],
+     datetime.datetime(2021, 2, 3, 0, 0, 1,
+                       tzinfo=ZoneInfo('America/New_York')),
+     datetime.datetime(2020, 12, 30, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York'))],
     [456, 6, 7, 'home_library3', 'city3', 'region3', 'postal_code3',
      'address3', datetime.date(2021, 3, 1), datetime.date(2021, 3, 2),
-     datetime.date(2021, 3, 3), datetime.datetime(2020, 12, 29, 23, 59, 59,
-                                                  tzinfo=_EST_TIMEZONE)],
-    [789, None, None, None, None, None, None, None, None, None, None,
-     datetime.datetime(2020, 12, 28, 23, 59, 59, tzinfo=_EST_TIMEZONE)]]
-
-_UPDATED_SIERRA_RESULTS = [
+     datetime.datetime(2021, 3, 3, 3, 3, 3,
+                       tzinfo=ZoneInfo('America/New_York')),
+     datetime.datetime(2020, 12, 29, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York'))],
+    [789, None, None, None, None, None, None, None, None, None,
+     datetime.datetime(2021, 4, 3, 4, 4, 4,
+                       tzinfo=ZoneInfo('America/New_York')),
+     datetime.datetime(2020, 12, 28, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York'))]]
+_EXTRA_SIERRA_RESULTS = [
     [999, 9, 9, 'home_library9', 'city9', 'region9', 'postal_code9',
      'address9', datetime.date(2021, 9, 1), datetime.date(2021, 9, 2),
-     datetime.date(2021, 9, 3), datetime.datetime(2020, 12, 1, 23, 59, 59,
-                                                  tzinfo=_EST_TIMEZONE)],
+     datetime.datetime(2021, 9, 3, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York')),
+     datetime.datetime(2020, 12, 1, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York'))],
     [888, 8, 8, 'home_library8', 'city8', 'region8', 'postal_code8',
      'address8', datetime.date(2021, 8, 1), datetime.date(2021, 8, 2),
-     datetime.date(2021, 8, 3), datetime.datetime(2020, 12, 2, 23, 59, 59,
-                                                  tzinfo=_EST_TIMEZONE)],
-    [777, None, None, None, None, None, None, None, None, None, None,
-     datetime.datetime(2022, 7, 7, 7, 7, 7, tzinfo=_EST_TIMEZONE)]]
+     datetime.datetime(2021, 8, 3, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York')),
+     datetime.datetime(2020, 12, 2, 23, 59, 59,
+                       tzinfo=ZoneInfo('America/New_York'))],
+    [777, None, None, None, None, None, None, None, None, None,
+     datetime.datetime(2021, 4, 3, 4, 4, 4,
+                       tzinfo=ZoneInfo('America/New_York')),
+     datetime.datetime(2022, 7, 7, 7, 7, 7,
+                       tzinfo=ZoneInfo('America/New_York'))]]
 
 _DELETED_SIERRA_RESULTS = [
     [111, datetime.date(2022, 1, 1)],
     [222, datetime.date(2022, 2, 2)],
     [333, datetime.date(2022, 3, 3)]]
 
-_BASE_LAST_SIERRA_ROW = pd.Series(
-    {'patron_id_plaintext': None, 'ptype_code': None, 'pcode3': None,
+_LAST_NEW_SIERRA_ROW = pd.Series(
+    {'patron_id_plaintext': '789', 'ptype_code': None, 'pcode3': None,
      'patron_home_library_code': None, 'city': None, 'region': None,
      'postal_code': None, 'address': None, 'circ_active_date_et': None,
-     'deletion_date_et': None})
-
-_LAST_NEW_SIERRA_ROW = pd.concat([
-    _BASE_LAST_SIERRA_ROW,
-    pd.Series({
-        'last_updated_date_et': None,
-        'creation_timestamp': datetime.datetime(
-            2020, 12, 28, 23, 59, 59, tzinfo=_EST_TIMEZONE)})]).rename(3)
-_LAST_NEW_SIERRA_ROW.loc['patron_id_plaintext'] = '789'
-
-_LAST_UPDATED_SIERRA_ROW = pd.concat([
-    _BASE_LAST_SIERRA_ROW,
-    pd.Series({
-        'creation_date_et': None,
-        'last_updated_timestamp': datetime.datetime(
-            2022, 7, 7, 7, 7, 7, tzinfo=_EST_TIMEZONE)})]).rename(6)
-_LAST_UPDATED_SIERRA_ROW.loc['patron_id_plaintext'] = '777'
+     'deletion_date_et': None,
+     'last_updated_timestamp': datetime.datetime(
+         2021, 4, 3, 4, 4, 4, tzinfo=ZoneInfo('America/New_York')),
+     'creation_timestamp': datetime.datetime(
+         2020, 12, 28, 23, 59, 59, tzinfo=ZoneInfo('America/New_York'))},
+    name=3)
+_LAST_UPDATED_SIERRA_ROW = copy.deepcopy(_LAST_NEW_SIERRA_ROW).rename(6)
+_LAST_UPDATED_SIERRA_ROW['patron_id_plaintext'] = '777'
+_LAST_UPDATED_SIERRA_ROW['creation_timestamp'] = datetime.datetime(
+    2022, 7, 7, 7, 7, 7, tzinfo=ZoneInfo('America/New_York'))
 
 _LAST_DELETED_SIERRA_ROW = pd.Series(
     {'patron_id_plaintext': '333',
@@ -77,14 +86,17 @@ _LAST_DELETED_SIERRA_ROW = pd.Series(
     name=2)
 
 _REDSHIFT_ADDRESS_RESULTS = [
-    ['addr_hash_9', 'obfuscated_patron_9', '99999999999'],
-    ['addr_hash_8', 'obfuscated_patron_8', '88888888888']]
+    ['addr_hash_9', 'obfuscated_patron_9', '99999999999', 'zz'],
+    ['addr_hash_8', 'obfuscated_patron_8', '88888888888', 'yy']]
+
+_REDSHIFT_IPHLC_RESULTS = [
+    ['obfuscated_4', 'aa'], ['obfuscated_5', 'bb'], ['obfuscated_6', 'cc']]
 
 _REDSHIFT_PATRON_RESULTS = [
     ['obfuscated_patron_1', 'addr_hash_1', '11111', '11111111111',
-     datetime.date(2021, 1, 1), datetime.date(2021, 6, 1), 1, 2, 'aa'],
+     datetime.date(2021, 1, 1), datetime.date(2021, 6, 1), 1, 2, 'aa', 'bb'],
     ['obfuscated_patron_3', 'addr_hash_3', '33333', '33333333333',
-     datetime.date(2021, 3, 3), datetime.date(2021, 6, 3), 3, 4, 'cc'],]
+     datetime.date(2021, 3, 3), datetime.date(2021, 6, 3), 3, 4, 'cc', 'dd']]
 
 _GEOCODER_INPUT = pd.DataFrame(
     data=[['address1', 'city1', 'region1', 'postal_code1', '123'],
@@ -103,48 +115,56 @@ _NEW_AVRO_ENCODER_INPUT = [
      'postal_code': 'posta', 'geoid': '12345',
      'creation_date_et': '2020-12-31', 'deletion_date_et': '2021-01-02',
      'circ_active_date_et': '2021-01-01', 'ptype_code': 4, 'pcode3': 5,
-     'patron_home_library_code': 'home_library1'},
+     'patron_home_library_code': 'home_library1',
+     'initial_patron_home_library_code': 'home_library1'},
     {'patron_id': 'obfuscated_5', 'address_hash': 'obfuscated_2',
      'postal_code': 'posta', 'geoid': '67890',
      'creation_date_et': '2020-12-30', 'deletion_date_et': '2021-02-02',
      'circ_active_date_et': '2021-02-01', 'ptype_code': 5, 'pcode3': 6,
-     'patron_home_library_code': 'home_library2'},
+     'patron_home_library_code': 'home_library2',
+     'initial_patron_home_library_code': 'home_library2'},
     {'patron_id': 'obfuscated_6', 'address_hash': 'obfuscated_3',
      'postal_code': None, 'geoid': None, 'creation_date_et': '2020-12-28',
      'deletion_date_et': None, 'circ_active_date_et': None, 'ptype_code': None,
-     'pcode3': None, 'patron_home_library_code': None}]
+     'pcode3': None, 'patron_home_library_code': None,
+     'initial_patron_home_library_code': None}]
 
 _UPDATED_AVRO_ENCODER_INPUT = copy.deepcopy(_NEW_AVRO_ENCODER_INPUT)
-_UPDATED_AVRO_ENCODER_INPUT[0]['creation_date_et'] = '2021-01-03'
-_UPDATED_AVRO_ENCODER_INPUT[1]['creation_date_et'] = '2021-02-03'
-_UPDATED_AVRO_ENCODER_INPUT[2]['creation_date_et'] = None
+_UPDATED_AVRO_ENCODER_INPUT[0]['initial_patron_home_library_code'] = 'aa'
+_UPDATED_AVRO_ENCODER_INPUT[1]['initial_patron_home_library_code'] = 'bb'
+_UPDATED_AVRO_ENCODER_INPUT[2]['initial_patron_home_library_code'] = 'cc'
 _UPDATED_AVRO_ENCODER_INPUT += [
     {'patron_id': 'obfuscated_patron_9', 'address_hash': 'addr_hash_9',
      'postal_code': 'posta', 'geoid': '99999999999',
-     'creation_date_et': '2021-09-03', 'deletion_date_et': '2021-09-02',
+     'creation_date_et': '2020-12-01', 'deletion_date_et': '2021-09-02',
      'circ_active_date_et': '2021-09-01', 'ptype_code': 9, 'pcode3': 9,
-     'patron_home_library_code': 'home_library9'},
+     'patron_home_library_code': 'home_library9',
+     'initial_patron_home_library_code': 'zz'},
     {'patron_id': 'obfuscated_patron_8', 'address_hash': 'addr_hash_8',
      'postal_code': 'posta', 'geoid': '88888888888',
-     'creation_date_et': '2021-08-03', 'deletion_date_et': '2021-08-02',
+     'creation_date_et': '2020-12-02', 'deletion_date_et': '2021-08-02',
      'circ_active_date_et': '2021-08-01', 'ptype_code': 8, 'pcode3': 8,
-     'patron_home_library_code': 'home_library8'}]
+     'patron_home_library_code': 'home_library8',
+     'initial_patron_home_library_code': 'yy'}]
 
 _DELETED_AVRO_ENCODER_INPUT = [
     {'patron_id': 'obfuscated_patron_1', 'address_hash': 'addr_hash_1',
      'postal_code': '11111', 'geoid': '11111111111',
      'creation_date_et': '2021-01-01', 'deletion_date_et': '2022-01-01',
      'circ_active_date_et': '2021-06-01', 'ptype_code': 1, 'pcode3': 2,
-     'patron_home_library_code': 'aa'},
+     'patron_home_library_code': 'aa',
+     'initial_patron_home_library_code': 'bb'},
     {'patron_id': 'obfuscated_patron_2', 'address_hash': None,
      'postal_code': None, 'geoid': None, 'creation_date_et': None,
      'deletion_date_et': '2022-02-02', 'circ_active_date_et': None,
-     'ptype_code': None, 'pcode3': None, 'patron_home_library_code': None},
+     'ptype_code': None, 'pcode3': None, 'patron_home_library_code': None,
+     'initial_patron_home_library_code': None},
     {'patron_id': 'obfuscated_patron_3', 'address_hash': 'addr_hash_3',
      'postal_code': '33333', 'geoid': '33333333333',
      'creation_date_et': '2021-03-03', 'deletion_date_et': '2022-03-03',
      'circ_active_date_et': '2021-06-03', 'ptype_code': 3, 'pcode3': 4,
-     'patron_home_library_code': 'cc'}]
+     'patron_home_library_code': 'cc',
+     'initial_patron_home_library_code': 'dd'}]
 
 _ENCODED_RECORDS = [b'encoded_1', b'encoded_2', b'encoded_3', b'encoded_4',
                     b'encoded_5']
@@ -255,8 +275,8 @@ class TestMain:
         mocker.patch(
             'lib.pipeline_controller.PipelineController._run_active_patrons_single_iteration',  # noqa: E501
             side_effect=[pd.Series({
-                'creation_timestamp':
-                    pd.Timestamp(_CREATION_DT.format(i), tz='EST')}, name=3)
+                'creation_timestamp': pd.Timestamp(
+                    _CREATION_DT.format(i), tz='America/New_York')}, name=3)
                 for i in range(2, 5)])
 
         test_instance.s3_client.fetch_cache.side_effect = [
@@ -285,13 +305,13 @@ class TestMain:
             'lib.pipeline_controller.PipelineController._run_active_patrons_single_iteration',  # noqa: E501
             side_effect=[
                 pd.Series({'last_updated_timestamp':
-                           pd.Timestamp(_UPDATE_DT.format(2), tz='EST')},
+                           pd.Timestamp(_UPDATE_DT.format(2), tz='America/New_York')},  # noqa: E501
                           name=3),
                 pd.Series({'last_updated_timestamp':
-                           pd.Timestamp(_UPDATE_DT.format(3), tz='EST')},
+                           pd.Timestamp(_UPDATE_DT.format(3), tz='America/New_York')},  # noqa: E501
                           name=3),
                 pd.Series({'last_updated_timestamp':
-                           pd.Timestamp(_UPDATE_DT.format(4), tz='EST')},
+                           pd.Timestamp(_UPDATE_DT.format(4), tz='America/New_York')},  # noqa: E501
                           name=1)])
 
         test_instance.s3_client.fetch_cache.side_effect = [
@@ -360,7 +380,7 @@ class TestMain:
             'deletion_date': _DELETION_DATE.format(1)}
         test_instance.sierra_client.execute_query.return_value = []
 
-        mocker.patch('lib.pipeline_controller.build_new_patrons_query',
+        mocker.patch('lib.pipeline_controller.build_active_patrons_query',
                      return_value='NEW PATRONS QUERY')
 
         test_instance.run_pipeline(PipelineMode.NEW_PATRONS)
@@ -394,15 +414,15 @@ class TestMain:
             'deletion_date': _DELETION_DATE.format(1)}
 
         test_instance.sierra_client.execute_query.return_value = \
-            _NEW_SIERRA_RESULTS
+            _ACTIVE_SIERRA_RESULTS
 
         test_instance.avro_encoder.encode_batch.return_value = \
             _ENCODED_RECORDS[:3]
         mocked_unknown_patrons_method = mocker.patch(
             'lib.pipeline_controller.PipelineController._process_unknown_patrons',  # noqa: E501
             return_value=_GEOID_OUTPUT)
-        mocker.patch('lib.pipeline_controller.build_new_patrons_query',
-                     return_value='NEW PATRONS QUERY')
+        mocker.patch('lib.pipeline_controller.build_active_patrons_query',
+                     return_value='ACTIVE PATRONS QUERY')
         mocker.patch('lib.pipeline_controller.obfuscate', side_effect=[
             'obfuscated_{}'.format(i) for i in range(1, 7)])
 
@@ -412,7 +432,7 @@ class TestMain:
 
         test_instance.sierra_client.connect.assert_called_once()
         test_instance.sierra_client.execute_query.assert_called_once_with(
-            'NEW PATRONS QUERY')
+            'ACTIVE PATRONS QUERY')
         test_instance.sierra_client.close_connection.assert_called_once()
 
         mocked_unknown_patrons_method.assert_called_once()
@@ -436,19 +456,21 @@ class TestMain:
             'deletion_date': _DELETION_DATE.format(1)}
 
         test_instance.sierra_client.execute_query.return_value = \
-            _NEW_SIERRA_RESULTS + _UPDATED_SIERRA_RESULTS
-        test_instance.redshift_client.execute_query.return_value = \
-            _REDSHIFT_ADDRESS_RESULTS
+            _ACTIVE_SIERRA_RESULTS + _EXTRA_SIERRA_RESULTS
+        test_instance.redshift_client.execute_query.side_effect = \
+            [_REDSHIFT_ADDRESS_RESULTS, _REDSHIFT_IPHLC_RESULTS]
 
         test_instance.avro_encoder.encode_batch.return_value = \
             _ENCODED_RECORDS
         mocked_unknown_patrons_method = mocker.patch(
             'lib.pipeline_controller.PipelineController._process_unknown_patrons',  # noqa: E501
             return_value=_GEOID_OUTPUT)
-        mocker.patch('lib.pipeline_controller.build_updated_patrons_query',
-                     return_value='UPDATED PATRONS QUERY')
+        mocker.patch('lib.pipeline_controller.build_active_patrons_query',
+                     return_value='ACTIVE PATRONS QUERY')
         mocker.patch('lib.pipeline_controller.build_redshift_address_query',
                      return_value='REDSHIFT ADDRESS QUERY')
+        mocker.patch('lib.pipeline_controller.build_redshift_iphlc_query',
+                     return_value='REDSHIFT IPHLC QUERY')
         mocker.patch('lib.pipeline_controller.obfuscate', side_effect=[
             'obfuscated_1', 'obfuscated_2', 'obfuscated_3', 'addr_hash_9',
             'addr_hash_8', 'obfuscated_4', 'obfuscated_5', 'obfuscated_6'])
@@ -459,13 +481,14 @@ class TestMain:
 
         test_instance.sierra_client.connect.assert_called_once()
         test_instance.sierra_client.execute_query.assert_called_once_with(
-            'UPDATED PATRONS QUERY')
+            'ACTIVE PATRONS QUERY')
         test_instance.sierra_client.close_connection.assert_called_once()
 
-        test_instance.redshift_client.connect.assert_called_once()
-        test_instance.redshift_client.execute_query.assert_called_once_with(
-            'REDSHIFT ADDRESS QUERY')
-        test_instance.redshift_client.close_connection.assert_called_once()
+        assert test_instance.redshift_client.connect.call_count == 2
+        test_instance.redshift_client.execute_query.assert_has_calls([
+            mocker.call('REDSHIFT ADDRESS QUERY'),
+            mocker.call('REDSHIFT IPHLC QUERY')])
+        assert test_instance.redshift_client.close_connection.call_count == 2
 
         mocked_unknown_patrons_method.assert_called_once()
         assert_frame_equal(mocked_unknown_patrons_method.call_args.args[0],
@@ -525,9 +548,10 @@ class TestMain:
 
     def test_run_active_pipeline_same_timestamp_records(
             self, test_instance, mocker):
-        SAME_TIME_RESULTS = copy.deepcopy(_NEW_SIERRA_RESULTS)
+        SAME_TIME_RESULTS = copy.deepcopy(_ACTIVE_SIERRA_RESULTS)
         for record in SAME_TIME_RESULTS:
-            record[-1] = datetime.datetime(2021, 1, 1, 00, 00, 00)
+            record[-1] = datetime.datetime(
+                2021, 1, 1, 0, 0, 0, tzinfo=ZoneInfo('America/New_York'))
 
         test_instance.poller_state = {
             'creation_dt': _CREATION_DT.format(1),
@@ -536,8 +560,8 @@ class TestMain:
 
         test_instance.sierra_client.execute_query.return_value = \
             SAME_TIME_RESULTS
-        mocker.patch('lib.pipeline_controller.build_new_patrons_query',
-                     return_value='NEW PATRONS QUERY')
+        mocker.patch('lib.pipeline_controller.build_active_patrons_query',
+                     return_value='ACTIVE PATRONS QUERY')
 
         with pytest.raises(PipelineControllerError):
             test_instance._run_active_patrons_single_iteration(
@@ -545,7 +569,7 @@ class TestMain:
 
         test_instance.sierra_client.connect.assert_called_once()
         test_instance.sierra_client.execute_query.assert_called_once_with(
-            'NEW PATRONS QUERY')
+            'ACTIVE PATRONS QUERY')
         test_instance.sierra_client.close_connection.assert_called_once()
 
     def test_run_deleted_pipeline_same_timestamp_records(
@@ -598,3 +622,15 @@ class TestMain:
         assert_frame_equal(
             test_instance.nyc_geocoder_client.get_geoids.call_args[0][0],
             _NYC_INPUT, check_like=True)
+
+    def test_find_iphlc_missing_patrons(self, test_instance, mocker, caplog):
+        test_instance.redshift_client.execute_query.return_value = \
+            [['123', 'aa'], ['789', 'bb']]
+
+        with caplog.at_level(logging.WARNING):
+            assert test_instance._find_initial_patron_home_library_codes(
+                pd.Series(['123', '456', '789', '012'])) == {
+                    '123': 'aa', '456': None, '789': 'bb', '012': None}
+
+        assert ('The following updated patrons could not be found in '
+                'Redshift: [\'012\', \'456\']') in caplog.text

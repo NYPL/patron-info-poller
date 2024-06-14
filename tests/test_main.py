@@ -2,7 +2,7 @@ import pytest
 import main
 
 from freezegun import freeze_time
-from lib.pipeline_controller import PipelineMode
+from helpers.pipeline_mode import PipelineMode
 from tests.test_helpers import TestHelpers
 
 

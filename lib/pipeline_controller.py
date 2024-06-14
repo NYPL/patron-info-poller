@@ -1,16 +1,15 @@
 import json
 import os
 import pandas as pd
-import warnings
 
 from concurrent.futures import ThreadPoolExecutor
-from enum import Enum
 from helpers.address_helper import reformat_malformed_address
-from helpers.query_helper import (build_deleted_patrons_query,
-                                  build_new_patrons_query,
+from helpers.pipeline_mode import PipelineMode
+from helpers.query_helper import (build_active_patrons_query,
+                                  build_deleted_patrons_query,
                                   build_redshift_address_query,
-                                  build_redshift_patron_query,
-                                  build_updated_patrons_query)
+                                  build_redshift_iphlc_query,
+                                  build_redshift_patron_query)
 from lib import CensusGeocoderApiClient, NycGeocoderClient
 from nypl_py_utils.classes.avro_encoder import AvroEncoder
 from nypl_py_utils.classes.kinesis_client import KinesisClient
@@ -21,31 +20,14 @@ from nypl_py_utils.functions.log_helper import create_log
 from nypl_py_utils.functions.obfuscation_helper import obfuscate
 
 
-class PipelineMode(Enum):
-    NEW_PATRONS = 1
-    UPDATED_PATRONS = 2
-    DELETED_PATRONS = 3
-
-    def __str__(self):
-        return self.name.lower().rstrip('_patrons')
-
-
 _REDSHIFT_COLUMNS = [
     'patron_id', 'address_hash', 'postal_code', 'geoid', 'creation_date_et',
-    'circ_active_date_et', 'ptype_code', 'pcode3', 'patron_home_library_code']
-_SIERRA_COLUMNS_MAP = {
-    PipelineMode.NEW_PATRONS:
-        ['patron_id_plaintext', 'ptype_code', 'pcode3',
-         'patron_home_library_code', 'city', 'region', 'postal_code',
-         'address', 'circ_active_date_et', 'deletion_date_et',
-         'last_updated_date_et', 'creation_timestamp'],
-    PipelineMode.UPDATED_PATRONS:
-        ['patron_id_plaintext', 'ptype_code', 'pcode3',
-         'patron_home_library_code', 'city', 'region', 'postal_code',
-         'address', 'circ_active_date_et', 'deletion_date_et',
-         'creation_date_et', 'last_updated_timestamp'],
-    PipelineMode.DELETED_PATRONS:
-        ['patron_id_plaintext', 'deletion_date_et']}
+    'circ_active_date_et', 'ptype_code', 'pcode3', 'patron_home_library_code',
+    'initial_patron_home_library_code']
+_SIERRA_COLUMNS = [
+    'patron_id_plaintext', 'ptype_code', 'pcode3', 'patron_home_library_code',
+    'city', 'region', 'postal_code', 'address', 'circ_active_date_et',
+    'deletion_date_et', 'last_updated_timestamp', 'creation_timestamp']
 _DTYPE_MAP = {
     'patron_id': 'string',
     'address_hash': 'string',
@@ -56,7 +38,8 @@ _DTYPE_MAP = {
     'circ_active_date_et': 'string',
     'ptype_code': 'Int64',
     'pcode3': 'Int64',
-    'patron_home_library_code': 'string'}
+    'patron_home_library_code': 'string',
+    'initial_patron_home_library_code': 'string'}
 
 
 class PipelineController:
@@ -73,12 +56,7 @@ class PipelineController:
 
         self.census_geocoder_client = CensusGeocoderApiClient()
         self.nyc_geocoder_client = NycGeocoderClient()
-        self.s3_client = S3Client(
-            os.environ['S3_BUCKET'], os.environ['S3_RESOURCE'])
         self.avro_encoder = AvroEncoder(os.environ['PATRON_INFO_SCHEMA_URL'])
-        self.kinesis_client = KinesisClient(
-            os.environ['KINESIS_STREAM_ARN'],
-            int(os.environ['KINESIS_BATCH_SIZE']))
         self.sierra_client = PostgreSQLClient(
             os.environ['SIERRA_DB_HOST'], os.environ['SIERRA_DB_PORT'],
             os.environ['SIERRA_DB_NAME'], os.environ['SIERRA_DB_USER'],
@@ -90,8 +68,18 @@ class PipelineController:
             os.environ['REDSHIFT_DB_PASSWORD'])
 
         self.has_max_batches = 'MAX_BATCHES' in os.environ
+        self.ignore_cache = os.environ.get('IGNORE_CACHE', False) == 'True'
+        self.ignore_kinesis = os.environ.get('IGNORE_KINESIS', False) == 'True'
         self.poller_state = None
         self.processed_ids = set()
+
+        if not self.ignore_cache:
+            self.s3_client = S3Client(
+                os.environ['S3_BUCKET'], os.environ['S3_RESOURCE'])
+        if not self.ignore_kinesis:
+            self.kinesis_client = KinesisClient(
+                os.environ['KINESIS_STREAM_ARN'],
+                int(os.environ['KINESIS_BATCH_SIZE']))
 
     def run_pipeline(self, mode):
         """Runs the full pipeline in the given PipelineMode mode."""
@@ -139,8 +127,10 @@ class PipelineController:
         self.logger.info((
             'Finished processing {mode} patrons session with {batch} batches, '
             'closing AWS connections').format(mode=mode, batch=batch_number-1))
-        self.s3_client.close()
-        self.kinesis_client.close()
+        if not self.ignore_cache:
+            self.s3_client.close()
+        if not self.ignore_kinesis:
+            self.kinesis_client.close()
 
     def _run_active_patrons_single_iteration(self, mode):
         """
@@ -148,16 +138,12 @@ class PipelineController:
         patrons or for recently updated patrons
         """
         # Get data from Sierra
-        query = (
-            build_new_patrons_query(self.poller_state['creation_dt'], self.now)
-            if mode == PipelineMode.NEW_PATRONS else
-            build_updated_patrons_query(
-                self.poller_state['update_dt'], self.now))
+        query = build_active_patrons_query(mode, self.poller_state, self.now)
         self.sierra_client.connect()
         sierra_raw_data = self.sierra_client.execute_query(query)
         self.sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
-            data=sierra_raw_data, columns=_SIERRA_COLUMNS_MAP[mode])
+            data=sierra_raw_data, columns=_SIERRA_COLUMNS)
         unprocessed_sierra_df['patron_id_plaintext'] = unprocessed_sierra_df[
             'patron_id_plaintext'].astype('Int64').astype('string')
 
@@ -182,14 +168,10 @@ class PipelineController:
             drop=True)
 
         # If there are no unprocessed patron ids left, return. Otherwise,
-        # update the total set of processed ids, ignoring the FutureWarning
-        # caused by the pandas update method, which is not relevant to this
-        # code.
+        # update the total set of processed ids.
         if len(processed_df) == 0:
             return None
-        with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)
-            self.processed_ids.update(processed_df['patron_id_plaintext'])
+        self.processed_ids.update(processed_df['patron_id_plaintext'])
 
         # Reduce the dataframe to only one row per patron_id, keeping the row
         # with the lowest display_order and patron_record_address_type_id
@@ -222,37 +204,43 @@ class PipelineController:
             processed_df[['patron_id', 'geoid']] = None
             processed_df[['patron_id', 'geoid']] = processed_df[
                 ['patron_id', 'geoid']].astype('string')
+            processed_df['initial_patron_home_library_code'] = processed_df[
+                'patron_home_library_code']
 
         # For every row not already in Redshift, obfuscate the patron id and
-        # geocode it, ignoring the FutureWarning caused by the pandas update
-        # method, which is not relevant to this code
+        # geocode it
         unknown_patrons_df = processed_df[
             pd.isnull(processed_df['patron_id'])][
             ['address', 'city', 'region', 'postal_code',
              'patron_id_plaintext']]
         if len(unknown_patrons_df) > 0:
             geocoded_df = self._process_unknown_patrons(unknown_patrons_df)
-            with warnings.catch_warnings():
-                warnings.simplefilter(action='ignore', category=FutureWarning)
-                processed_df.update(geocoded_df)
+            processed_df.update(geocoded_df)
+            if mode == PipelineMode.UPDATED_PATRONS:
+                unknown_iphlc_mask = pd.isnull(
+                    processed_df['initial_patron_home_library_code'])
+                iphlc_map = self._find_initial_patron_home_library_codes(
+                    processed_df.loc[unknown_iphlc_mask, 'patron_id'])
+                processed_df.loc[unknown_iphlc_mask,
+                                 'initial_patron_home_library_code'] = \
+                    processed_df.loc[unknown_iphlc_mask, 'patron_id'].map(
+                        iphlc_map)
 
         # Modify the data to match what's expected by the PatronInfo Avro
         # schema, encode it, and send it to Kinesis
-        if (mode == PipelineMode.NEW_PATRONS):
-            processed_df['creation_date_et'] = processed_df[
-                'creation_timestamp'].dt.tz_convert('EST').dt.date
         processed_df['postal_code'] = processed_df['postal_code'].str.slice(
             stop=5)
+        processed_df['creation_date_et'] = processed_df[
+            'creation_timestamp'].dt.date
 
         results_df = processed_df[
             ['patron_id', 'address_hash', 'postal_code', 'geoid',
              'creation_date_et', 'deletion_date_et', 'circ_active_date_et',
-             'ptype_code', 'pcode3', 'patron_home_library_code']]
-        results_df = results_df.astype(_DTYPE_MAP)
-
+             'ptype_code', 'pcode3', 'patron_home_library_code',
+             'initial_patron_home_library_code']].astype(_DTYPE_MAP)
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        if os.environ.get('IGNORE_KINESIS', False) != 'True':
+        if not self.ignore_kinesis:
             self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
@@ -269,7 +257,7 @@ class PipelineController:
         self.sierra_client.close_connection()
         unprocessed_sierra_df = pd.DataFrame(
             data=sierra_raw_data,
-            columns=_SIERRA_COLUMNS_MAP[PipelineMode.DELETED_PATRONS])
+            columns=['patron_id_plaintext', 'deletion_date_et'])
         unprocessed_sierra_df['patron_id_plaintext'] = unprocessed_sierra_df[
             'patron_id_plaintext'].astype('Int64').astype('string')
 
@@ -290,14 +278,10 @@ class PipelineController:
             drop=True)
 
         # If there are no unprocessed patron ids left, return. Otherwise,
-        # update the total set of processed ids, ignoring the FutureWarning
-        # caused by the pandas update method, which is not relevant to this
-        # code.
+        # update the total set of processed ids
         if len(processed_df) == 0:
             return None
-        with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)
-            self.processed_ids.update(processed_df['patron_id_plaintext'])
+        self.processed_ids.update(processed_df['patron_id_plaintext'])
 
         # Obfuscate the patron ids using bcrypt
         self.logger.info('Obfuscating ({}) patron ids'.format(
@@ -315,12 +299,11 @@ class PipelineController:
         results_df = processed_df[
             ['patron_id', 'address_hash', 'postal_code', 'geoid',
              'creation_date_et', 'deletion_date_et', 'circ_active_date_et',
-             'ptype_code', 'pcode3', 'patron_home_library_code']]
-        results_df = results_df.astype(_DTYPE_MAP)
-
+             'ptype_code', 'pcode3', 'patron_home_library_code',
+             'initial_patron_home_library_code']].astype(_DTYPE_MAP)
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
-        if os.environ.get('IGNORE_KINESIS', False) != 'True':
+        if not self.ignore_kinesis:
             self.kinesis_client.send_records(encoded_records)
 
         return unprocessed_sierra_df.iloc[-1]
@@ -340,7 +323,8 @@ class PipelineController:
         self.redshift_client.close_connection()
         redshift_df = pd.DataFrame(
             data=redshift_raw_data, dtype='string',
-            columns=['address_hash', 'patron_id', 'geoid'])
+            columns=['address_hash', 'patron_id', 'geoid',
+                     'initial_patron_home_library_code'])
 
         new_all_patrons_df = all_patrons_df.merge(redshift_df, how='left',
                                                   on='address_hash')
@@ -392,11 +376,10 @@ class PipelineController:
             return address_df[['patron_id', 'geoid']]
         geoids = self.census_geocoder_client.get_geoids(input_df)
 
-        # For addresses that weren't geocoded, reformat them and try again,
-        # ignoring the FutureWarning caused by the pandas update method, which
-        # is not relevant to this code. Sending two requests is also
-        # recommended by the API because it sometimes erroneously fails to
-        # match an address when in batch mode. For more info, see:
+        # For addresses that weren't geocoded, reformat them and try again.
+        # Sending two requests is also recommended by the API because it
+        # sometimes erroneously fails to match an address when in batch mode.
+        # For more info, see:
         # https://www2.census.gov/geo/pdfs/maps-data/data/Census_Geocoder_FAQ.pdf
         retry_indices = geoids[geoids.isnull()].index
         if len(retry_indices) == 0:
@@ -404,13 +387,9 @@ class PipelineController:
             return address_df[['patron_id', 'geoid']]
         input_df = input_df.loc[retry_indices]
         input_df = input_df.apply(reformat_malformed_address, axis=1)
-        with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)
-            geoids.update(self.census_geocoder_client.get_geoids(input_df))
+        geoids.update(self.census_geocoder_client.get_geoids(input_df))
 
-        # Send addresses that still aren't geocoded to the NYC geocoder,
-        # ignoring the FutureWarning caused by the pandas update method, which
-        # is not relevant to this code
+        # Send addresses that still aren't geocoded to the NYC geocoder
         retry_indices = geoids[geoids.isnull()].index
         if len(retry_indices) == 0:
             address_df['geoid'] = geoids
@@ -423,22 +402,44 @@ class PipelineController:
         if len(input_df) == 0:
             address_df['geoid'] = geoids
             return address_df[['patron_id', 'geoid']]
-        with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)
-            geoids.update(self.nyc_geocoder_client.get_geoids(input_df))
 
+        geoids.update(self.nyc_geocoder_client.get_geoids(input_df))
         self.logger.info(
             'Successfully geocoded {success}/{total} non-empty addresses'
             .format(success=len(geoids[geoids.notnull()]), total=len(geoids)))
         address_df['geoid'] = geoids
         return address_df[['patron_id', 'geoid']]
 
+    def _find_initial_patron_home_library_codes(self, unknown_iphlc_series):
+        """
+        Finds the initial patron home library code for existing patrons whose
+        addresses could not be found in Redshift
+        """
+        patron_ids_str = "','".join(
+            unknown_iphlc_series.to_string(index=False).split())
+        patron_ids_str = "'" + patron_ids_str + "'"
+        self.redshift_client.connect()
+        redshift_raw_data = self.redshift_client.execute_query(
+            build_redshift_iphlc_query(patron_ids_str))
+        self.redshift_client.close_connection()
+
+        iphlc_map = {row[0]: row[1] for row in redshift_raw_data}
+        missing_patron_ids = set(unknown_iphlc_series).difference(
+            set(iphlc_map.keys()))
+        if len(missing_patron_ids) > 0:
+            self.logger.warning(
+                'The following updated patrons could not be found in '
+                'Redshift: {}'.format(sorted(list(missing_patron_ids))))
+            for patron_id in missing_patron_ids:
+                iphlc_map[patron_id] = None
+        return iphlc_map
+
     def _get_poller_state(self, batch_number):
         """
         Retrieves the poller state from the S3 cache, the config, or the local
         memory
         """
-        if os.environ.get('IGNORE_CACHE', False) != 'True':
+        if not self.ignore_cache:
             return self.s3_client.fetch_cache()
         elif batch_number == 1:
             return {'creation_dt': os.environ.get('STARTING_CREATION_DT',
@@ -463,7 +464,7 @@ class PipelineController:
         elif (mode == PipelineMode.DELETED_PATRONS):
             self.poller_state['deletion_date'] = last_processed_data[
                 'deletion_date_et'].isoformat()
-        if os.environ.get('IGNORE_CACHE', False) != 'True':
+        if not self.ignore_cache:
             self.s3_client.set_cache(self.poller_state)
 
 
