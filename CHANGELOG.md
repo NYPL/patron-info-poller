@@ -1,4 +1,4 @@
-## 2024-06-14 -- v2.0.0
+## 2024-06-17 -- v2.0.0
 - Query for (if necessary) and store patron's initial home library code
 - Use ET instead of EST when calculating all dates
 - Use the same Sierra query for new/updated patrons

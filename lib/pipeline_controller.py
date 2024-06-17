@@ -199,7 +199,7 @@ class PipelineController:
         # For every (patron id + address) hash found in Redshift, use the geoid
         # and obfuscated patron id found there
         if mode == PipelineMode.UPDATED_PATRONS:
-            processed_df = self._find_known_addreses(processed_df)
+            processed_df = self._find_known_addresses(processed_df)
         else:
             processed_df[['patron_id', 'geoid']] = None
             processed_df[['patron_id', 'geoid']] = processed_df[
@@ -308,7 +308,7 @@ class PipelineController:
 
         return unprocessed_sierra_df.iloc[-1]
 
-    def _find_known_addreses(self, all_patrons_df):
+    def _find_known_addresses(self, all_patrons_df):
         """
         Checks if any of the (patron id + address) hashes already appear in
         Redshift. If they do, take the geoid and obfuscated patron id from
