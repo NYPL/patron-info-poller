@@ -2,7 +2,8 @@ import os
 import pytz
 
 from datetime import datetime
-from lib.pipeline_controller import PipelineController, PipelineMode
+from helpers.pipeline_mode import PipelineMode
+from lib.pipeline_controller import PipelineController
 from nypl_py_utils.functions.config_helper import load_env_file
 from nypl_py_utils.functions.log_helper import create_log
 
