@@ -86,17 +86,20 @@ _LAST_DELETED_SIERRA_ROW = pd.Series(
     name=2)
 
 _REDSHIFT_ADDRESS_RESULTS = [
-    ['addr_hash_9', 'obfuscated_patron_9', '99999999999', 'zz'],
-    ['addr_hash_8', 'obfuscated_patron_8', '88888888888', 'yy']]
+    ['addr_hash_9', 'obfuscated_patron_9', '99999999999', 'zz', 90],
+    ['addr_hash_8', 'obfuscated_patron_8', '88888888888', 'yy', 80]]
 
-_REDSHIFT_IPHLC_RESULTS = [
-    ['obfuscated_4', 'aa'], ['obfuscated_5', 'bb'], ['obfuscated_6', 'cc']]
+_REDSHIFT_INITIAL_CODES_RESULTS = [
+    ['obfuscated_4', 'aa', 11], ['obfuscated_5', 'bb', 12],
+    ['obfuscated_6', 'cc', 13]]
 
 _REDSHIFT_PATRON_RESULTS = [
     ['obfuscated_patron_1', 'addr_hash_1', '11111', '11111111111',
-     datetime.date(2021, 1, 1), datetime.date(2021, 6, 1), 1, 2, 'aa', 'bb'],
+     datetime.date(2021, 1, 1), datetime.date(2021, 6, 1), 1, 2, 'aa', 'bb',
+     12],
     ['obfuscated_patron_3', 'addr_hash_3', '33333', '33333333333',
-     datetime.date(2021, 3, 3), datetime.date(2021, 6, 3), 3, 4, 'cc', 'dd']]
+     datetime.date(2021, 3, 3), datetime.date(2021, 6, 3), 3, 4, 'cc', 'dd',
+     14]]
 
 _GEOCODER_INPUT = pd.DataFrame(
     data=[['address1', 'city1', 'region1', 'postal_code1', '123'],
@@ -116,36 +119,41 @@ _NEW_AVRO_ENCODER_INPUT = [
      'creation_date_et': '2020-12-31', 'deletion_date_et': '2021-01-02',
      'circ_active_date_et': '2021-01-01', 'ptype_code': 4, 'pcode3': 5,
      'patron_home_library_code': 'home_library1',
-     'initial_patron_home_library_code': 'home_library1'},
+     'initial_patron_home_library_code': 'home_library1',
+     'initial_ptype_code': 4},
     {'patron_id': 'obfuscated_5', 'address_hash': 'obfuscated_2',
      'postal_code': 'posta', 'geoid': '67890',
      'creation_date_et': '2020-12-30', 'deletion_date_et': '2021-02-02',
      'circ_active_date_et': '2021-02-01', 'ptype_code': 5, 'pcode3': 6,
      'patron_home_library_code': 'home_library2',
-     'initial_patron_home_library_code': 'home_library2'},
+     'initial_patron_home_library_code': 'home_library2',
+     'initial_ptype_code': 5},
     {'patron_id': 'obfuscated_6', 'address_hash': 'obfuscated_3',
      'postal_code': None, 'geoid': None, 'creation_date_et': '2020-12-28',
      'deletion_date_et': None, 'circ_active_date_et': None, 'ptype_code': None,
      'pcode3': None, 'patron_home_library_code': None,
-     'initial_patron_home_library_code': None}]
+     'initial_patron_home_library_code': None, 'initial_ptype_code': None}]
 
 _UPDATED_AVRO_ENCODER_INPUT = copy.deepcopy(_NEW_AVRO_ENCODER_INPUT)
 _UPDATED_AVRO_ENCODER_INPUT[0]['initial_patron_home_library_code'] = 'aa'
 _UPDATED_AVRO_ENCODER_INPUT[1]['initial_patron_home_library_code'] = 'bb'
 _UPDATED_AVRO_ENCODER_INPUT[2]['initial_patron_home_library_code'] = 'cc'
+_UPDATED_AVRO_ENCODER_INPUT[0]['initial_ptype_code'] = 11
+_UPDATED_AVRO_ENCODER_INPUT[1]['initial_ptype_code'] = 12
+_UPDATED_AVRO_ENCODER_INPUT[2]['initial_ptype_code'] = 13
 _UPDATED_AVRO_ENCODER_INPUT += [
     {'patron_id': 'obfuscated_patron_9', 'address_hash': 'addr_hash_9',
      'postal_code': 'posta', 'geoid': '99999999999',
      'creation_date_et': '2020-12-01', 'deletion_date_et': '2021-09-02',
      'circ_active_date_et': '2021-09-01', 'ptype_code': 9, 'pcode3': 9,
      'patron_home_library_code': 'home_library9',
-     'initial_patron_home_library_code': 'zz'},
+     'initial_patron_home_library_code': 'zz', 'initial_ptype_code': 90},
     {'patron_id': 'obfuscated_patron_8', 'address_hash': 'addr_hash_8',
      'postal_code': 'posta', 'geoid': '88888888888',
      'creation_date_et': '2020-12-02', 'deletion_date_et': '2021-08-02',
      'circ_active_date_et': '2021-08-01', 'ptype_code': 8, 'pcode3': 8,
      'patron_home_library_code': 'home_library8',
-     'initial_patron_home_library_code': 'yy'}]
+     'initial_patron_home_library_code': 'yy', 'initial_ptype_code': 80}]
 
 _DELETED_AVRO_ENCODER_INPUT = [
     {'patron_id': 'obfuscated_patron_1', 'address_hash': 'addr_hash_1',
@@ -153,18 +161,18 @@ _DELETED_AVRO_ENCODER_INPUT = [
      'creation_date_et': '2021-01-01', 'deletion_date_et': '2022-01-01',
      'circ_active_date_et': '2021-06-01', 'ptype_code': 1, 'pcode3': 2,
      'patron_home_library_code': 'aa',
-     'initial_patron_home_library_code': 'bb'},
+     'initial_patron_home_library_code': 'bb', 'initial_ptype_code': 12},
     {'patron_id': 'obfuscated_patron_2', 'address_hash': None,
      'postal_code': None, 'geoid': None, 'creation_date_et': None,
      'deletion_date_et': '2022-02-02', 'circ_active_date_et': None,
      'ptype_code': None, 'pcode3': None, 'patron_home_library_code': None,
-     'initial_patron_home_library_code': None},
+     'initial_patron_home_library_code': None, 'initial_ptype_code': None},
     {'patron_id': 'obfuscated_patron_3', 'address_hash': 'addr_hash_3',
      'postal_code': '33333', 'geoid': '33333333333',
      'creation_date_et': '2021-03-03', 'deletion_date_et': '2022-03-03',
      'circ_active_date_et': '2021-06-03', 'ptype_code': 3, 'pcode3': 4,
      'patron_home_library_code': 'cc',
-     'initial_patron_home_library_code': 'dd'}]
+     'initial_patron_home_library_code': 'dd', 'initial_ptype_code': 14}]
 
 _ENCODED_RECORDS = [b'encoded_1', b'encoded_2', b'encoded_3', b'encoded_4',
                     b'encoded_5']
@@ -458,7 +466,7 @@ class TestMain:
         test_instance.sierra_client.execute_query.return_value = \
             _ACTIVE_SIERRA_RESULTS + _EXTRA_SIERRA_RESULTS
         test_instance.redshift_client.execute_query.side_effect = \
-            [_REDSHIFT_ADDRESS_RESULTS, _REDSHIFT_IPHLC_RESULTS]
+            [_REDSHIFT_ADDRESS_RESULTS, _REDSHIFT_INITIAL_CODES_RESULTS]
 
         test_instance.avro_encoder.encode_batch.return_value = \
             _ENCODED_RECORDS
@@ -469,8 +477,8 @@ class TestMain:
                      return_value='ACTIVE PATRONS QUERY')
         mocker.patch('lib.pipeline_controller.build_redshift_address_query',
                      return_value='REDSHIFT ADDRESS QUERY')
-        mocker.patch('lib.pipeline_controller.build_redshift_iphlc_query',
-                     return_value='REDSHIFT IPHLC QUERY')
+        mocker.patch('lib.pipeline_controller.build_redshift_initial_codes_query',  # noqa: E501
+                     return_value='REDSHIFT INITIAL CODES QUERY')
         mocker.patch('lib.pipeline_controller.obfuscate', side_effect=[
             'obfuscated_1', 'obfuscated_2', 'obfuscated_3', 'addr_hash_9',
             'addr_hash_8', 'obfuscated_4', 'obfuscated_5', 'obfuscated_6'])
@@ -487,7 +495,7 @@ class TestMain:
         assert test_instance.redshift_client.connect.call_count == 2
         test_instance.redshift_client.execute_query.assert_has_calls([
             mocker.call('REDSHIFT ADDRESS QUERY'),
-            mocker.call('REDSHIFT IPHLC QUERY')])
+            mocker.call('REDSHIFT INITIAL CODES QUERY')])
         assert test_instance.redshift_client.close_connection.call_count == 2
 
         mocked_unknown_patrons_method.assert_called_once()
@@ -623,14 +631,18 @@ class TestMain:
             test_instance.nyc_geocoder_client.get_geoids.call_args[0][0],
             _NYC_INPUT, check_like=True)
 
-    def test_find_iphlc_missing_patrons(self, test_instance, mocker, caplog):
+    def test_find_initial_codes(self, test_instance, mocker, caplog):
+        REDSHIFT_RESULTS = [['123', 'aa', 1], ['789', 'bb', 2]]
         test_instance.redshift_client.execute_query.return_value = \
-            [['123', 'aa'], ['789', 'bb']]
+            REDSHIFT_RESULTS
 
         with caplog.at_level(logging.WARNING):
-            assert test_instance._find_initial_patron_home_library_codes(
-                pd.Series(['123', '456', '789', '012'])) == {
-                    '123': 'aa', '456': None, '789': 'bb', '012': None}
+            assert_frame_equal(
+                test_instance._find_initial_codes(
+                    pd.Series(['123', '456', '789', '012'])),
+                pd.DataFrame(
+                    REDSHIFT_RESULTS, columns=['patron_id', 'iphlc', 'ipc'])
+            )
 
         assert ('The following updated patrons could not be found in '
                 'Redshift: [\'012\', \'456\']') in caplog.text

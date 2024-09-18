@@ -8,7 +8,7 @@ from helpers.pipeline_mode import PipelineMode
 from helpers.query_helper import (build_active_patrons_query,
                                   build_deleted_patrons_query,
                                   build_redshift_address_query,
-                                  build_redshift_iphlc_query,
+                                  build_redshift_initial_codes_query,
                                   build_redshift_patron_query)
 from lib import CensusGeocoderApiClient, NycGeocoderClient
 from nypl_py_utils.classes.avro_encoder import AvroEncoder
@@ -23,7 +23,7 @@ from nypl_py_utils.functions.obfuscation_helper import obfuscate
 _REDSHIFT_COLUMNS = [
     'patron_id', 'address_hash', 'postal_code', 'geoid', 'creation_date_et',
     'circ_active_date_et', 'ptype_code', 'pcode3', 'patron_home_library_code',
-    'initial_patron_home_library_code']
+    'initial_patron_home_library_code', 'initial_ptype_code']
 _SIERRA_COLUMNS = [
     'patron_id_plaintext', 'ptype_code', 'pcode3', 'patron_home_library_code',
     'city', 'region', 'postal_code', 'address', 'circ_active_date_et',
@@ -36,10 +36,11 @@ _DTYPE_MAP = {
     'creation_date_et': 'string',
     'deletion_date_et': 'string',
     'circ_active_date_et': 'string',
-    'ptype_code': 'Int64',
-    'pcode3': 'Int64',
+    'ptype_code': 'Int16',
+    'pcode3': 'Int16',
     'patron_home_library_code': 'string',
-    'initial_patron_home_library_code': 'string'}
+    'initial_patron_home_library_code': 'string',
+    'initial_ptype_code': 'Int16'}
 
 
 class PipelineController:
@@ -204,27 +205,32 @@ class PipelineController:
             processed_df[['patron_id', 'geoid']] = None
             processed_df[['patron_id', 'geoid']] = processed_df[
                 ['patron_id', 'geoid']].astype('string')
-            processed_df['initial_patron_home_library_code'] = processed_df[
-                'patron_home_library_code']
+            processed_df[
+                ['initial_patron_home_library_code', 'initial_ptype_code']] = \
+                processed_df[['patron_home_library_code', 'ptype_code']]
+            processed_df['is_in_redshift'] = False
+            processed_df['is_in_redshift'] = processed_df['is_in_redshift'].astype('bool')
 
         # For every row not already in Redshift, obfuscate the patron id and
         # geocode it
-        unknown_patrons_df = processed_df[
-            pd.isnull(processed_df['patron_id'])][
-            ['address', 'city', 'region', 'postal_code',
-             'patron_id_plaintext']]
+        unknown_patrons_df = processed_df.loc[
+            ~processed_df['is_in_redshift'],
+            ['address', 'city', 'region', 'postal_code', 'patron_id_plaintext']
+        ]
         if len(unknown_patrons_df) > 0:
             geocoded_df = self._process_unknown_patrons(unknown_patrons_df)
             processed_df.update(geocoded_df)
             if mode == PipelineMode.UPDATED_PATRONS:
-                unknown_iphlc_mask = pd.isnull(
-                    processed_df['initial_patron_home_library_code'])
-                iphlc_map = self._find_initial_patron_home_library_codes(
-                    processed_df.loc[unknown_iphlc_mask, 'patron_id'])
-                processed_df.loc[unknown_iphlc_mask,
-                                 'initial_patron_home_library_code'] = \
-                    processed_df.loc[unknown_iphlc_mask, 'patron_id'].map(
-                        iphlc_map)
+                initial_codes_df = self._find_initial_codes(processed_df.loc[
+                    ~processed_df['is_in_redshift'], 'patron_id'])
+                processed_df = processed_df.merge(
+                    initial_codes_df, how='left', on='patron_id')
+                processed_df.loc[
+                    ~processed_df['is_in_redshift'],
+                    'initial_patron_home_library_code'] = processed_df['iphlc']
+                processed_df.loc[
+                    ~processed_df['is_in_redshift'],
+                    'initial_ptype_code'] = processed_df['ipc']
 
         # Modify the data to match what's expected by the PatronInfo Avro
         # schema, encode it, and send it to Kinesis
@@ -237,7 +243,8 @@ class PipelineController:
             ['patron_id', 'address_hash', 'postal_code', 'geoid',
              'creation_date_et', 'deletion_date_et', 'circ_active_date_et',
              'ptype_code', 'pcode3', 'patron_home_library_code',
-             'initial_patron_home_library_code']].astype(_DTYPE_MAP)
+             'initial_patron_home_library_code', 'initial_ptype_code']
+        ].astype(_DTYPE_MAP)
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
         if not self.ignore_kinesis:
@@ -300,7 +307,8 @@ class PipelineController:
             ['patron_id', 'address_hash', 'postal_code', 'geoid',
              'creation_date_et', 'deletion_date_et', 'circ_active_date_et',
              'ptype_code', 'pcode3', 'patron_home_library_code',
-             'initial_patron_home_library_code']].astype(_DTYPE_MAP)
+             'initial_patron_home_library_code', 'initial_ptype_code']
+        ].astype(_DTYPE_MAP)
         encoded_records = self.avro_encoder.encode_batch(
             json.loads(results_df.to_json(orient='records')))
         if not self.ignore_kinesis:
@@ -322,12 +330,15 @@ class PipelineController:
             build_redshift_address_query(address_hashes_str))
         self.redshift_client.close_connection()
         redshift_df = pd.DataFrame(
-            data=redshift_raw_data, dtype='string',
+            data=redshift_raw_data,
             columns=['address_hash', 'patron_id', 'geoid',
-                     'initial_patron_home_library_code'])
+                     'initial_patron_home_library_code', 'initial_ptype_code'])
+        redshift_df['is_in_redshift'] = True
 
         new_all_patrons_df = all_patrons_df.merge(redshift_df, how='left',
                                                   on='address_hash')
+        new_all_patrons_df['is_in_redshift'] = new_all_patrons_df[
+            'is_in_redshift'].astype('boolean').fillna(False)
         return new_all_patrons_df
 
     def _find_deleted_patrons(self, deleted_patrons_df):
@@ -410,29 +421,28 @@ class PipelineController:
         address_df['geoid'] = geoids
         return address_df[['patron_id', 'geoid']]
 
-    def _find_initial_patron_home_library_codes(self, unknown_iphlc_series):
+    def _find_initial_codes(self, unknown_initial_codes_series):
         """
-        Finds the initial patron home library code for existing patrons whose
-        addresses could not be found in Redshift
+        Finds the initial patron home library code and ptype code for existing
+        patrons whose addresses could not be found in Redshift
         """
         patron_ids_str = "','".join(
-            unknown_iphlc_series.to_string(index=False).split())
+            unknown_initial_codes_series.to_string(index=False).split())
         patron_ids_str = "'" + patron_ids_str + "'"
         self.redshift_client.connect()
         redshift_raw_data = self.redshift_client.execute_query(
-            build_redshift_iphlc_query(patron_ids_str))
+            build_redshift_initial_codes_query(patron_ids_str))
         self.redshift_client.close_connection()
 
-        iphlc_map = {row[0]: row[1] for row in redshift_raw_data}
-        missing_patron_ids = set(unknown_iphlc_series).difference(
-            set(iphlc_map.keys()))
+        initial_codes_df = pd.DataFrame(
+            data=redshift_raw_data, columns=['patron_id', 'iphlc', 'ipc'])
+        missing_patron_ids = set(unknown_initial_codes_series).difference(
+            set(initial_codes_df['patron_id']))
         if len(missing_patron_ids) > 0:
             self.logger.warning(
                 'The following updated patrons could not be found in '
                 'Redshift: {}'.format(sorted(list(missing_patron_ids))))
-            for patron_id in missing_patron_ids:
-                iphlc_map[patron_id] = None
-        return iphlc_map
+        return initial_codes_df
 
     def _get_poller_state(self, batch_number):
         """

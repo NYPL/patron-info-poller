@@ -40,13 +40,15 @@ _DELETED_PATRONS_QUERY = '''
     LIMIT {limit};'''
 
 _REDSHIFT_ADDRESS_QUERY = '''
-    SELECT address_hash, patron_id, geoid, initial_patron_home_library_code
+    SELECT
+        address_hash, patron_id, geoid, initial_patron_home_library_code,
+        initial_ptype_code
     FROM {redshift_table}
     WHERE address_hash IN ({address_hashes})
 '''
 
-_REDSHIFT_IPHLC_QUERY = '''
-    SELECT patron_id, initial_patron_home_library_code
+_REDSHIFT_INITIAL_CODES_QUERY = '''
+    SELECT patron_id, initial_patron_home_library_code, initial_ptype_code
     FROM {redshift_table}
     WHERE patron_id IN ({patron_ids})
 '''
@@ -54,7 +56,7 @@ _REDSHIFT_IPHLC_QUERY = '''
 _REDSHIFT_PATRON_QUERY = '''
     SELECT patron_id, address_hash, postal_code, geoid, creation_date_et,
         circ_active_date_et, ptype_code, pcode3, patron_home_library_code,
-        initial_patron_home_library_code
+        initial_patron_home_library_code, initial_ptype_code
     FROM {redshift_table}
     WHERE patron_id IN ({patron_ids})
 '''
@@ -85,8 +87,8 @@ def build_redshift_address_query(address_hashes):
         address_hashes=address_hashes)
 
 
-def build_redshift_iphlc_query(patron_ids):
-    return _REDSHIFT_IPHLC_QUERY.format(
+def build_redshift_initial_codes_query(patron_ids):
+    return _REDSHIFT_INITIAL_CODES_QUERY.format(
         redshift_table=os.environ['REDSHIFT_TABLE'],
         patron_ids=patron_ids)
 
