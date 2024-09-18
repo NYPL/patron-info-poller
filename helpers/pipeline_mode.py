@@ -7,4 +7,4 @@ class PipelineMode(Enum):
     DELETED_PATRONS = 3
 
     def __str__(self):
-        return self.name.lower().rstrip('_patrons')
+        return self.name.lower().rstrip("_patrons")

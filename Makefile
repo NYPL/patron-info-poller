@@ -8,7 +8,7 @@ help:
 	@echo "make test"
 	@echo "    run associated test suite with pytest"
 	@echo "make lint"
-	@echo "    lint project files using the flake8 linter"
+	@echo "    lint project files using the black linter"
 
 run:
 	docker image build -t patron-info-poller:local .; \
@@ -18,4 +18,4 @@ test:
 	pytest
 
 lint:
-	flake8 --exclude *env
+	black ./ --check --exclude="(env/)|(tests/)"
