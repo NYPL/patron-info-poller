@@ -1,5 +1,6 @@
 ## 2024-09-18 -- v2.1.0
 - Query for (if necessary) and store patron's initial ptype code
+- Update python to 3.12
 - Update to use black formatter
 
 ## 2024-06-17 -- v2.0.0
