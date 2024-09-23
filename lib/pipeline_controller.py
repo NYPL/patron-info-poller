@@ -173,7 +173,19 @@ class PipelineController:
     def _run_active_patrons_single_iteration(self, mode):
         """
         Runs the full pipeline a single time for either newly created patrons or for
-        recently updated patrons
+        recently updated patrons. Note that there are three scenarios here:
+        1) Mode is NEW_PATRONS and is_in_redshift = False: We're polling for new
+           patrons, so every address needs to be geocoded but there's no need to query
+           Redshift.
+        2a) Mode is UPDATED_PATRONS and is_in_redshift = True: We're polling for updated
+            patrons and a patron has NOT changed addresses. This means we've queried
+            Redshift for the patron's address and found it, so there's no need to
+            geocode the address or query again for the initial_ptype_code.
+        2b) Mode is UPDATED_PATRONS and is_in_redshift = False: We're polling for
+            updated patrons and a patrons has changed addresses. This means we've
+            queried Redshift for the patron's address and haven't found it, so we have
+            to geocode the new address and then send another query to Redshift to find
+            the patron's initial_ptype_code.
         """
         # Get data from Sierra
         query = build_active_patrons_query(mode, self.poller_state, self.now)
