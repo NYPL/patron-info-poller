@@ -1,8 +1,8 @@
 name: Run Python unit tests
 
-on: 
+on:
   pull_request:
-    actions: [ opened ]
+    types: [ labeled, unlabeled, opened, reopened, synchronize ]
 
 jobs:
   changelog:
@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.12
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.12'
           cache: 'pip'
 
       - name: Install dependencies
