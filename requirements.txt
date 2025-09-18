@@ -1,12 +1,8 @@
-black
 numpy
-nypl-py-utils[avro-client,kinesis-client,postgresql-client,redshift-client,s3-client,config-helper,obfuscation-helper]==1.3.2
+nypl-py-utils[avro-client,kinesis-client,postgresql-client,redshift-client,s3-client,config-helper,obfuscation-helper]==1.7.0
 pandas
-pytest
-pytest-freezer
-pytest-mock
+python-crfsuite==0.9.10
 python-geosupport
 requests
-requests-mock
 unidecode
 usaddress
