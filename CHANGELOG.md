@@ -1,3 +1,6 @@
+## 2025-09-18 -- v2.1.1
+- Do not log error for missing Redshift patrons in QA
+
 ## 2024-09-18 -- v2.1.0
 - Query for (if necessary) and store patron's initial ptype code
 - Update python to 3.12

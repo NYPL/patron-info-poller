@@ -558,7 +558,10 @@ class PipelineController:
         missing_patron_ids = set(unknown_initial_codes_series).difference(
             set(initial_codes_df["patron_id"])
         )
-        if len(missing_patron_ids) > 0:
+        if len(missing_patron_ids) > 0 and (
+            os.environ["ENVIRONMENT"] == "production"
+            or os.environ["ENVIRONMENT"] == "test_environment"
+        ):
             self.logger.warning(
                 "The following updated patrons could not be found in Redshift: "
                 "{}".format(sorted(list(missing_patron_ids)))
