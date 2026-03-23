@@ -1,5 +1,5 @@
 numpy
-nypl-py-utils[avro-client,kinesis-client,postgresql-client,redshift-client,s3-client,config-helper,obfuscation-helper]==1.7.0
+nypl-py-utils[avro-client,kinesis-client,postgresql-client,redshift-client,s3-client,config-helper,obfuscation-helper]==1.10.0
 pandas
 python-crfsuite==0.9.10
 python-geosupport
